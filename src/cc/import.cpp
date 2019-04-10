@@ -374,7 +374,7 @@ int32_t GetSelfimportProof(std::string source, CMutableTransaction &mtx, CScript
 }
 
 // make import tx with burntx and dual daemon
-std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts)
+std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()),burntx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; uint256 codaburntxid; std::vector<unsigned char> dummyproof;

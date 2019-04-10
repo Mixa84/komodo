@@ -60,7 +60,7 @@ extern std::string ASSETCHAINS_SELFIMPORT;
 
 std::string MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount, CMutableTransaction &mtx);
 int32_t GetSelfimportProof(std::string source, CMutableTransaction &mtx, CScript &scriptPubKey, TxProof &proof, std::string rawsourcetx, int32_t &ivout, uint256 sourcetxid, uint64_t burnAmount);
-std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts);
+std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx);
 
 UniValue assetchainproof(const UniValue& params, bool fHelp)
 {
@@ -415,7 +415,7 @@ UniValue importdual(const UniValue& params, bool fHelp)
 {
     UniValue result(UniValue::VOBJ);
     CMutableTransaction mtx;
-    std::string hex,source,sourceaddr,destaddr,burntxid; uint64_t burnAmount;
+    std::string hex,source,rawburntx;
     CPubKey destpub; std::vector<CTxOut> vouts;
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
@@ -425,18 +425,8 @@ UniValue importdual(const UniValue& params, bool fHelp)
         throw runtime_error("burntxid source_addr dest_pubkey amount\n");
 
     CCerror = "";
-
-    burntxid = params[0].get_str();
-    sourceaddr = params[1].get_str();
-    destaddr = params[2].get_str();
-    burnAmount = atof(params[3].get_str().c_str()) * COIN + 0.00000000499999;
-
+    rawburntx = params[0].get_str();
     source = ASSETCHAINS_SELFIMPORT;   //defaults to -ac_import=... param
-
-    CTxDestination dest = DecodeDestination(destaddr.c_str());
-    CScript scriptPubKey = GetScriptForDestination(dest);
-    vouts.push_back(CTxOut(burnAmount,scriptPubKey));
-
     if (source == "BEAM")
     {
         if (ASSETCHAINS_BEAMPORT == 0)
@@ -449,7 +439,7 @@ UniValue importdual(const UniValue& params, bool fHelp)
     {
         if (ASSETCHAINS_CODAPORT == 0)
             return(-1);
-        hex=MakeCodaImportTx(0,burntxid,sourceaddr,vouts);
+        hex=MakeCodaImportTx(0,rawburntx);
         // confirm via ASSETCHAINS_CODAPORT that burnTx/hash is a valid CODA burn
         // return(0);
     }
