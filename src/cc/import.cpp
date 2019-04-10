@@ -33,87 +33,10 @@ uint256 BitcoinGetProofMerkleRoot(const std::vector<uint8_t> &proofData, std::ve
 uint256 GatewaysReverseScan(uint256 &txid, int32_t height, uint256 reforacletxid, uint256 batontxid);
 int32_t GatewaysCointxidExists(struct CCcontract_info *cp, uint256 cointxid);
 uint8_t DecodeGatewaysBindOpRet(char *depositaddr,const CScript &scriptPubKey,uint256 &tokenid,std::string &coin,int64_t &totalsupply,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &gatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype);
-
-char *nonportable_path(char *str)
-{
-    int32_t i;
-    for (i=0; str[i]!=0; i++)
-        if ( str[i] == '/' )
-            str[i] = '\\';
-    return(str);
-}
-
-char *portable_path(char *str)
-{
-#ifdef _WIN32
-    return(nonportable_path(str));
-#else
-#ifdef __PNACL
-    /*int32_t i,n;
-     if ( str[0] == '/' )
-     return(str);
-     else
-     {
-     n = (int32_t)strlen(str);
-     for (i=n; i>0; i--)
-     str[i] = str[i-1];
-     str[0] = '/';
-     str[n+1] = 0;
-     }*/
-#endif
-    return(str);
-#endif
-}
-
-void *loadfile(char *fname,uint8_t **bufp,long *lenp,long *allocsizep)
-{
-    FILE *fp;
-    long  filesize,buflen = *allocsizep;
-    uint8_t *buf = *bufp;
-    *lenp = 0;
-    if ( (fp= fopen(portable_path(fname),"rb")) != 0 )
-    {
-        fseek(fp,0,SEEK_END);
-        filesize = ftell(fp);
-        if ( filesize == 0 )
-        {
-            fclose(fp);
-            *lenp = 0;
-            //printf("loadfile null size.(%s)\n",fname);
-            return(0);
-        }
-        if ( filesize > buflen )
-        {
-            *allocsizep = filesize;
-            *bufp = buf = (uint8_t *)realloc(buf,(long)*allocsizep+64);
-        }
-        rewind(fp);
-        if ( buf == 0 )
-            printf("Null buf ???\n");
-        else
-        {
-            if ( fread(buf,1,(long)filesize,fp) != (unsigned long)filesize )
-                printf("error reading filesize.%ld\n",(long)filesize);
-            buf[filesize] = 0;
-        }
-        fclose(fp);
-        *lenp = filesize;
-        //printf("loaded.(%s)\n",buf);
-    } //else printf("OS_loadfile couldnt load.(%s)\n",fname);
-    return(buf);
-}
-
-void *filestr(long *allocsizep,char *_fname)
-{
-    long filesize = 0; char *fname,*buf = 0; void *retptr;
-    *allocsizep = 0;
-    fname = (char *)malloc(strlen(_fname)+1);
-    strcpy(fname,_fname);
-    retptr = loadfile(fname,(uint8_t **)&buf,&filesize,allocsizep);
-    free(fname);
-    return(retptr);
-}
-
+char *nonportable_path(char *str);
+char *portable_path(char *str);
+void *loadfile(char *fname,uint8_t **bufp,long *lenp,long *allocsizep);
+void *filestr(long *allocsizep,char *_fname);
 // ac_import=chain support:
 // encode opret for gateways import
 CScript EncodeImportTxOpRet(uint32_t targetCCid, std::string coin, std::vector<CPubKey> publishers, std::vector<uint256>txids, int32_t height, uint256 cointxid, int32_t claimvout, std::string rawburntx, std::vector<uint8_t>proof, CPubKey destpub, int64_t amount)
@@ -379,82 +302,93 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()),burntx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; uint256 codaburntxid; std::vector<unsigned char> dummyproof;
     int32_t i,numvouts,n,m; std::string coin,error; struct CCcontract_info *cp, C;
-    cJSON *result,*tmp,*tmp1; unsigned char hash[SHA256_DIGEST_LENGTH+1];
+    cJSON *result,*tx; unsigned char hash[SHA256_DIGEST_LENGTH+1];
     char out[SHA256_DIGEST_LENGTH*2+1],*retstr,*destaddr,*receiver; TxProof txProof; uint64_t amount;
+    const char *err;
 
     cp = CCinit(&C, EVAL_GATEWAYS);
     if (txfee == 0)
         txfee = 10000;
-    mypk = pubkey2pk(Mypubkey());
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, receipt.c_str(), receipt.size());
-    SHA256_Final(hash, &sha256);
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    LOGSTREAM("importcoin", CCLOG_INFO, stream << rawburntx << std::endl);
+    if ((tx=cJSON_ParseWithOpts(rawburntx.c_str(),&err,0))==0)
     {
-        sprintf(out + (i * 2), "%02x", hash[i]);
-    }
-    out[65]='\0';
-    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
-    codaburntxid.SetHex(out);
-    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
-    result=CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
-    if (result==0)
-    {
-        if (retstr!=0)
-        {            
-            CCerror=std::string("CodaRPC: ")+retstr;
-            free(retstr);
-        }
+        printf("%s\n",err);
+        CCerror="MakeCodaImportTx: invalid Coda burn tx";
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
         return("");
     }
-    else
-    {
-        if ((tmp=jobj(jitem(jarray(&n,result,(char *)"payments"),0),(char *)"payload"))!=0 && (destaddr=jstr(jobj(tmp,(char *)"common"),(char *)"memo"))!=0 &&
-            (receiver=jstr(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"receiver"))!=0 && (amount=j64bits(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"amount"))!=0) 
-        {
-            LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receiver=" << receiver << " destaddr=" << destaddr << " amount=" << amount << std::endl);
-            if (strcmp(receiver,CODA_BURN_ADDRESS)!=0)
-            {
-                CCerror="MakeCodaImportTx: invalid burn address, coins do not go to predefined burn address - ";
-                CCerror+=CODA_BURN_ADDRESS;
-                LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
-                free(result);
-                return("");
-            }
-            CTxDestination dest = DecodeDestination(destaddr);
-            CScript scriptPubKey = GetScriptForDestination(dest);
-            if (vouts[0]!=CTxOut(amount*COIN,scriptPubKey))
-            {
-                CCerror="MakeCodaImportTx: invalid destination address, burnTx memo!=importTx destination";
-                LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
-                free(result);
-                return("");
-            }
-            if (amount*COIN!=vouts[0].nValue)
-            {
-                CCerror="MakeCodaImportTx: invalid amount, burnTx amount!=importTx amount";
-                LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
-                free(result);
-                return("");
-            }
-            burntx.vin.push_back(CTxIn(codaburntxid,0,CScript()));
-            burntx.vout.push_back(MakeBurnOutput(amount*COIN,0xffffffff,"CODA",vouts,dummyproof,srcaddr,receipt));
-            return HexStr(E_MARSHAL(ss << MakeImportCoinTransaction(txProof,burntx,vouts)));
-        }
-        else
-        {
-            CCerror="MakeCodaImportTx: invalid Coda burn tx";
-            LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
-            free(result);
-            return("");
-        }
-        
-    }
-    CCerror="MakeCodaImportTx: error fetching Coda tx";
-    LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
-    free(result);
+    printf("%s\n",cJSON_Print(tx));
     return("");
+    // mypk = pubkey2pk(Mypubkey());
+    // SHA256_CTX sha256;
+    // SHA256_Init(&sha256);
+    // SHA256_Update(&sha256, receipt.c_str(), receipt.size());
+    // SHA256_Final(hash, &sha256);
+    // for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    // {
+    //     sprintf(out + (i * 2), "%02x", hash[i]);
+    // }
+    // out[65]='\0';
+    // LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
+    // codaburntxid.SetHex(out);
+    // LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
+    // result=CodaRPC(&retstr,"verify-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
+    // if (result==0)
+    // {
+    //     if (retstr!=0)
+    //     {            
+    //         CCerror=std::string("CodaRPC: ")+retstr;
+    //         free(retstr);
+    //     }
+    //     return("");
+    // }
+    // else
+    // {
+    //     if ((tmp=jobj(jitem(jarray(&n,result,(char *)"payments"),0),(char *)"payload"))!=0 && (destaddr=jstr(jobj(tmp,(char *)"common"),(char *)"memo"))!=0 &&
+    //         (receiver=jstr(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"receiver"))!=0 && (amount=j64bits(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"amount"))!=0) 
+    //     {
+    //         LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receiver=" << receiver << " destaddr=" << destaddr << " amount=" << amount << std::endl);
+    //         if (strcmp(receiver,CODA_BURN_ADDRESS)!=0)
+    //         {
+    //             CCerror="MakeCodaImportTx: invalid burn address, coins do not go to predefined burn address - ";
+    //             CCerror+=CODA_BURN_ADDRESS;
+    //             LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+    //             free(result);
+    //             return("");
+    //         }
+    //         CTxDestination dest = DecodeDestination(destaddr);
+    //         CScript scriptPubKey = GetScriptForDestination(dest);
+    //         if (vouts[0]!=CTxOut(amount*COIN,scriptPubKey))
+    //         {
+    //             CCerror="MakeCodaImportTx: invalid destination address, burnTx memo!=importTx destination";
+    //             LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+    //             free(result);
+    //             return("");
+    //         }
+    //         if (amount*COIN!=vouts[0].nValue)
+    //         {
+    //             CCerror="MakeCodaImportTx: invalid amount, burnTx amount!=importTx amount";
+    //             LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+    //             free(result);
+    //             return("");
+    //         }
+    //         burntx.vin.push_back(CTxIn(codaburntxid,0,CScript()));
+    //         burntx.vout.push_back(MakeBurnOutput(amount*COIN,0xffffffff,"CODA",vouts,dummyproof,srcaddr,receipt));
+    //         return HexStr(E_MARSHAL(ss << MakeImportCoinTransaction(txProof,burntx,vouts)));
+    //     }
+    //     else
+    //     {
+    //         CCerror="MakeCodaImportTx: invalid Coda burn tx";
+    //         LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+    //         free(result);
+    //         return("");
+    //     }
+        
+    // }
+    // CCerror="MakeCodaImportTx: error fetching Coda tx";
+    // LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+    // free(result);
+    // return("");
 }
 
 // use proof from the above functions to validate the import

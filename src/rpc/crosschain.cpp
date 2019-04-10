@@ -421,8 +421,8 @@ UniValue importdual(const UniValue& params, bool fHelp)
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
         throw runtime_error("importdual only works on -ac_import chains");
 
-    if (fHelp || params.size() < 4)
-        throw runtime_error("burntxid source_addr dest_pubkey amount\n");
+    if (fHelp || params.size() != 1)
+        throw runtime_error("rawburntx\n");
 
     CCerror = "";
     rawburntx = params[0].get_str();
