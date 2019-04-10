@@ -309,7 +309,7 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
     cp = CCinit(&C, EVAL_GATEWAYS);
     if (txfee == 0)
         txfee = 10000;
-    LOGSTREAM("importcoin", CCLOG_INFO, stream << rawburntx << std::endl);
+    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << rawburntx << std::endl);
     if ((tx=cJSON_ParseWithOpts(rawburntx.c_str(),&err,0))==0)
     {
         printf("%s\n",err);
