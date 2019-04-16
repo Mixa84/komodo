@@ -301,7 +301,7 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()),burntx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; uint256 codaburntxid; std::vector<unsigned char> dummyproof;
-    int32_t i,numvouts,n,m; std::string coin,error; struct CCcontract_info *cp, C;
+    int32_t i,numvouts,n,m; std::string receipt,coin,error; struct CCcontract_info *cp, C;
     cJSON *result,*tx; unsigned char hash[SHA256_DIGEST_LENGTH+1];
     char out[SHA256_DIGEST_LENGTH*2+1],*retstr,*destaddr,*receiver; TxProof txProof; uint64_t amount;
     const char *err;
@@ -312,26 +312,30 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
     LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << rawburntx << std::endl);
     if ((tx=cJSON_ParseWithOpts(rawburntx.c_str(),&err,0))==0)
     {
-        printf("%s\n",err);
         CCerror="MakeCodaImportTx: invalid Coda burn tx";
         LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
         return("");
     }
     printf("%s\n",cJSON_Print(tx));
-    return("");
-    // mypk = pubkey2pk(Mypubkey());
-    // SHA256_CTX sha256;
-    // SHA256_Init(&sha256);
-    // SHA256_Update(&sha256, receipt.c_str(), receipt.size());
-    // SHA256_Final(hash, &sha256);
-    // for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-    // {
-    //     sprintf(out + (i * 2), "%02x", hash[i]);
-    // }
-    // out[65]='\0';
-    // LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
-    // codaburntxid.SetHex(out);
-    // LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
+    mypk = pubkey2pk(Mypubkey());
+    if ((receipt=jstr(tx,(char *)"initial_receipt")).empty())
+    {
+        CCerror="MakeCodaImportTx: no receipt in Coda burn tx";
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+        return("");
+    }
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, receipt.c_str(), receipt.size());
+    SHA256_Final(hash, &sha256);
+    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        sprintf(out + (i * 2), "%02x", hash[i]);
+    }
+    out[65]='\0';
+    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
+    codaburntxid.SetHex(out);
+    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
     // result=CodaRPC(&retstr,"verify-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
     // if (result==0)
     // {
@@ -385,10 +389,10 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
     //     }
         
     // }
-    // CCerror="MakeCodaImportTx: error fetching Coda tx";
-    // LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
+    CCerror="MakeCodaImportTx: error fetching Coda tx";
+    LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
     // free(result);
-    // return("");
+    return("");
 }
 
 // use proof from the above functions to validate the import
