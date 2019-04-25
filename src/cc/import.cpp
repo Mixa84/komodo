@@ -22,8 +22,16 @@
 #include <openssl/sha.h>
 
 #include "key_io.h"
+#include "openssl/evp.h"
 #define CODA_BURN_ADDRESS "KPrrRoPfHOnNpZZQ6laHXdQDkSQDkVHaN0V+LizLlHxz7NaA59sBAAAA"
-
+/*
+ * CC Eval method for import coin.
+ *
+ * This method should control every parameter of the ImportCoin transaction, since it has no signature
+ * to protect it from malleability.
+ 
+ ##### 0xffffffff is a special CCid for single chain/dual daemon imports
+ */
 extern std::string ASSETCHAINS_SELFIMPORT;
 extern uint16_t ASSETCHAINS_CODAPORT,ASSETCHAINS_BEAMPORT;
 extern uint8_t ASSETCHAINS_OVERRIDE_PUBKEY33[33];
@@ -306,6 +314,30 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string rawburntx)
     char out[SHA256_DIGEST_LENGTH*2+1],*retstr,*destaddr,*receiver; TxProof txProof; uint64_t amount;
     const char *err;
 
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    OpenSSL_add_all_digests();
+    const EVP_MD *md;
+    md = EVP_blake2s256();//EVP_get_digestbyname("blake2s");
+    if (!md)
+    {
+        printf("ERROR\n");
+        return("");
+    }
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+    unsigned int md_len;
+
+    char addr[64]="RRQPHxEPwKyFgrUajog9u4ktxhzfhMBzXm";
+    EVP_DigestInit_ex(ctx, md, NULL);
+     EVP_DigestUpdate(ctx, addr, strlen(addr));
+     EVP_DigestFinal_ex(ctx, md_value, &md_len);
+     EVP_MD_CTX_free(ctx);
+
+     printf("Digest is: ");
+     for (i = 0; i < md_len; i++)
+         printf("%02x", md_value[i]);
+     printf("\n");
+    printf("Base58: %s\n",EncodeBase64(md_value,md_len).c_str());
+return("");
     cp = CCinit(&C, EVAL_GATEWAYS);
     if (txfee == 0)
         txfee = 10000;
