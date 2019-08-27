@@ -224,6 +224,20 @@ int64_t OracleCurrentDatafee(uint256 reforacletxid,char *markeraddr,CPubKey publ
             }
         }
     }
+    std::vector<CTransaction> tmp_txs;
+    myGet_mempool_txs(tmp_txs,EVAL_ORACLES,'R');
+    for (std::vector<CTransaction>::const_iterator it=tmp_txs.begin(); it!=tmp_txs.end(); it++)
+    {
+        const CTransaction &txmempool = *it;
+        const uint256 &hash = txmempool.GetHash();
+        if ( (numvouts= txmempool.vout.size()) > 0 )
+        {
+            if ( DecodeOraclesOpRet(txmempool.vout[numvouts-1].scriptPubKey,oracletxid,pk,dfee) == 'R' && oracletxid == reforacletxid && pk == publisher && dfee < datafee)
+            {
+                datafee = dfee;
+            }
+        }
+    }
     return(datafee);
 }
 
@@ -296,6 +310,25 @@ uint256 OracleBatonUtxo(uint64_t txfee,struct CCcontract_info *cp,uint256 refora
                             //char str[65]; fprintf(stderr,"set batontxid %s height.%d\n",uint256_str(str,batontxid),height);
                         }
                     }
+                }
+            }
+        }
+    }
+    if (batontxid==zeroid)
+    {
+        std::vector<CTransaction> tmp_txs;
+        myGet_mempool_txs(tmp_txs,EVAL_ORACLES,'R');
+        myGet_mempool_txs(tmp_txs,EVAL_ORACLES,'D');
+        for (std::vector<CTransaction>::const_iterator it=tmp_txs.begin(); it!=tmp_txs.end(); it++)
+        {
+            const CTransaction &txmempool = *it;
+            const uint256 &hash = txmempool.GetHash();
+            if ( (numvouts= txmempool.vout.size()) > 0 )
+            {
+                if ( (DecodeOraclesData(txmempool.vout[numvouts-1].scriptPubKey,oracletxid,btxid,pk,data) == 'D' || DecodeOraclesOpRet(txmempool.vout[numvouts-1].scriptPubKey,oracletxid,pk,dfee) == 'R') && oracletxid == reforacletxid && pk == publisher)
+                {
+                    batontxid = hash;
+                    break;
                 }
             }
         }
@@ -785,6 +818,39 @@ int64_t AddOracleInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,uint
                 }            
             }
         } else fprintf(stderr,"couldnt find transaction\n");
+    }
+    if (totalinputs<total)
+    {
+        std::vector<CTransaction> tmp_txs;
+        myGet_mempool_txs(tmp_txs,EVAL_ORACLES,'S');
+        myGet_mempool_txs(tmp_txs,EVAL_ORACLES,'D');
+        for (std::vector<CTransaction>::const_iterator it=tmp_txs.begin(); it!=tmp_txs.end(); it++)
+        {
+            const CTransaction &txmempool = *it;
+            const uint256 &hash = txmempool.GetHash();
+            if ( (numvouts= txmempool.vout.size()) > 0 )
+            {
+                if ((funcid=DecodeOraclesOpRet(txmempool.vout[numvouts].scriptPubKey,tmporacletxid,tmppk,tmpnum))!=0 && (funcid=='S' || funcid=='D'))
+                {
+                    if (funcid=='D' && DecodeOraclesData(txmempool.vout[numvouts].scriptPubKey,tmporacletxid,tmpbatontxid,tmppk,data)==0)
+                        fprintf(stderr,"invalid oraclesdata transaction \n");
+                    else if (tmporacletxid==oracletxid)
+                    {  
+                        // get valid CC payments
+                        if ( (nValue= IsOraclesvout(cp,txmempool,vout)) >= 10000     && myIsutxo_spentinmempool(ignoretxid,ignorevin,txid,vout) == 0 )
+                        {
+                            if ( total != 0 && maxinputs != 0 )
+                                mtx.vin.push_back(CTxIn(txid,vout,CScript()));
+                            nValue = it->second.satoshis;
+                            totalinputs += nValue;
+                            n++;
+                            if ( (total > 0 && totalinputs >= total) || (maxinputs > 0 && n >= maxinputs) )
+                                break;
+                        } //else fprintf(stderr,"nValue %.8f or utxo memspent\n",(double)nValue/COIN);
+                    }            
+                }
+            }
+        }
     }
     return(totalinputs);
 }
