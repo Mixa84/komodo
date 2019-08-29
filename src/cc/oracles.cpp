@@ -828,6 +828,7 @@ int64_t AddOracleInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,uint
         {
             const CTransaction &txmempool = *it;
             const uint256 &hash = txmempool.GetHash();
+            vout=0;
             if ( (numvouts= txmempool.vout.size()) > 0 )
             {
                 if ((funcid=DecodeOraclesOpRet(txmempool.vout[numvouts].scriptPubKey,tmporacletxid,tmppk,tmpnum))!=0 && (funcid=='S' || funcid=='D'))
@@ -837,11 +838,10 @@ int64_t AddOracleInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,uint
                     else if (tmporacletxid==oracletxid)
                     {  
                         // get valid CC payments
-                        if ( (nValue= IsOraclesvout(cp,txmempool,vout)) >= 10000     && myIsutxo_spentinmempool(ignoretxid,ignorevin,txid,vout) == 0 )
+                        if ( (nValue= IsOraclesvout(cp,txmempool,vout)) >= 10000 && myIsutxo_spentinmempool(ignoretxid,ignorevin,txid,vout) == 0 )
                         {
                             if ( total != 0 && maxinputs != 0 )
                                 mtx.vin.push_back(CTxIn(txid,vout,CScript()));
-                            nValue = it->second.satoshis;
                             totalinputs += nValue;
                             n++;
                             if ( (total > 0 && totalinputs >= total) || (maxinputs > 0 && n >= maxinputs) )
