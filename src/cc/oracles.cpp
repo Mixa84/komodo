@@ -199,7 +199,7 @@ CPubKey OracleBatonPk(char *batonaddr,struct CCcontract_info *cp)
 
 int64_t OracleCurrentDatafee(uint256 reforacletxid,char *markeraddr,CPubKey publisher)
 {
-    uint256 txid,oracletxid,hashBlock; int64_t datafee=0,dfee; int32_t dheight=0,vout,height,numvouts; CTransaction tx; CPubKey pk;
+    uint256 txid,oracletxid,hashBlock; int64_t datafee=MAX_MONEY,dfee; int32_t dheight=0,vout,height,numvouts; CTransaction tx; CPubKey pk;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
     SetCCunspents(unspentOutputs,markeraddr,false);
     for (std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >::const_iterator it=unspentOutputs.begin(); it!=unspentOutputs.end(); it++)
@@ -831,17 +831,17 @@ int64_t AddOracleInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,uint
             vout=0;
             if ( (numvouts= txmempool.vout.size()) > 0 )
             {
-                if ((funcid=DecodeOraclesOpRet(txmempool.vout[numvouts].scriptPubKey,tmporacletxid,tmppk,tmpnum))!=0 && (funcid=='S' || funcid=='D'))
+                if ((funcid=DecodeOraclesOpRet(txmempool.vout[numvouts-1].scriptPubKey,tmporacletxid,tmppk,tmpnum))!=0 && (funcid=='S' || funcid=='D'))
                 {
-                    if (funcid=='D' && DecodeOraclesData(txmempool.vout[numvouts].scriptPubKey,tmporacletxid,tmpbatontxid,tmppk,data)==0)
+                    if (funcid=='D' && DecodeOraclesData(txmempool.vout[numvouts-1].scriptPubKey,tmporacletxid,tmpbatontxid,tmppk,data)==0)
                         fprintf(stderr,"invalid oraclesdata transaction \n");
                     else if (tmporacletxid==oracletxid)
                     {  
                         // get valid CC payments
-                        if ( (nValue= IsOraclesvout(cp,txmempool,vout)) >= 10000 && myIsutxo_spentinmempool(ignoretxid,ignorevin,txid,vout) == 0 )
+                        if ( (nValue= IsOraclesvout(cp,txmempool,vout)) >= 10000 && myIsutxo_spentinmempool(ignoretxid,ignorevin,hash,vout) == 0 )
                         {
                             if ( total != 0 && maxinputs != 0 )
-                                mtx.vin.push_back(CTxIn(txid,vout,CScript()));
+                                mtx.vin.push_back(CTxIn(hash,vout,CScript()));
                             totalinputs += nValue;
                             n++;
                             if ( (total > 0 && totalinputs >= total) || (maxinputs > 0 && n >= maxinputs) )
