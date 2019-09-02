@@ -24,6 +24,8 @@
 
 #include "key_io.h"
 #define CODA_BURN_ADDRESS "KPrrRoPfHOnNpZZQ6laHXdQDkSQDkVHaN0V+LizLlHxz7NaA59sBAAAA"
+#define CODA_AC_BURN_ADDRESS ""
+
 /*
  * CC Eval method for import coin.
  *
@@ -202,11 +204,9 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string sr
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()),burntx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; uint256 codaburntxid; std::vector<unsigned char> dummyproof;
-    int32_t i,numvouts,n,m; std::string coin,error; struct CCcontract_info *cp, C;
-    cJSON *result,*tmp,*tmp1; unsigned char hash[SHA256_DIGEST_LENGTH+1];
+    int32_t i,numvouts,n,m; std::string coin,error; cJSON *result,*tmp,*tmp1; unsigned char hash[SHA256_DIGEST_LENGTH+1];
     char out[SHA256_DIGEST_LENGTH*2+1],*retstr,*destaddr,*receiver; TxProof txProof; uint64_t amount;
 
-    cp = CCinit(&C, EVAL_GATEWAYS);
     if (txfee == 0)
         txfee = 10000;
     mypk = pubkey2pk(Mypubkey());
@@ -278,6 +278,48 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string sr
     CCerror="MakeCodaImportTx: error fetching Coda tx";
     LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
     free(result);
+    return("");
+}
+
+std::string MakeCodaBurnTx(uint64_t txfee, uint64_t amount)
+{
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
+    CPubKey mypk; struct CCcontract_info *cp,C;
+
+    cp = CCinit(&C,EVAL_IMPORTCOIN);
+    mypk = pubkey2pk(Mypubkey());
+    if ( txfee == 0 )
+        txfee = 10000;
+    if (AddNormalinputs(mtx,mypk,amount,64)!=0) 
+    {
+        CTxDestination dest = DecodeDestination(CODA_AC_BURN_ADDRESS);
+        CScript scriptPubKey = GetScriptForDestination(dest);
+        mtx.vout.push_back(CTxOut(amount,scriptPubKey));      
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,CScript()));
+    }
+    CCerror = strprintf("error adding funds for Coda burn tx");
+    LOGSTREAM("importdual",CCLOG_INFO, stream << CCerror << std::endl);
+    return("");
+}
+
+std::string MakeCodaBurnMarkerTx(uint64_t txfee, std::string address, std::string data)
+{
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
+    CPubKey mypk; struct CCcontract_info *cp,C;
+
+    cp = CCinit(&C,EVAL_IMPORTCOIN);
+    mypk = pubkey2pk(Mypubkey());
+    if ( txfee == 0 )
+        txfee = 10000;
+    if (AddNormalinputs(mtx,mypk,2*txfee,3)!=0) 
+    {
+        CTxDestination dest = DecodeDestination(address);
+        CScript scriptPubKey = GetScriptForDestination(dest);
+        mtx.vout.push_back(CTxOut(txfee,scriptPubKey));      
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,CScript() << OP_RETURN << E_MARSHAL(ss << data)));
+    }
+    CCerror = strprintf("error adding funds for Coda burn tx");
+    LOGSTREAM("importdual",CCLOG_INFO, stream << CCerror << std::endl);
     return("");
 }
 

@@ -6144,7 +6144,7 @@ UniValue marmara_lock(const UniValue& params, bool fHelp)
 UniValue channelslist(const UniValue& params, bool fHelp)
 {
     if ( fHelp || params.size() > 0 )
-        throw runtime_error("channelsinfo\n");
+        throw runtime_error("channelslist\n");
     if ( ensure_CCrequirements(EVAL_CHANNELS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     const CKeyStore& keystore = *pwalletMain;
@@ -6156,7 +6156,7 @@ UniValue channelsinfo(const UniValue& params, bool fHelp)
 {
     uint256 opentxid;
     if ( fHelp || params.size() > 1 )
-        throw runtime_error("channelsinfo [opentxid]\n");
+        throw runtime_error("channelsinfo opentxid\n");
     if ( ensure_CCrequirements(EVAL_CHANNELS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
     const CKeyStore& keystore = *pwalletMain;

@@ -361,6 +361,8 @@ static const CRPCCommand vRPCCommands[] =
     { "crosschain",         "migrate_createnotaryapprovaltransaction", &migrate_createnotaryapprovaltransaction, true },
     { "crosschain",         "selfimport", &selfimport, true  },
     { "crosschain",         "importdual", &importdual, true  },
+    { "crosschain",         "burndual", &burndual, true  },
+    { "crosschain",         "markburndual", &markburndual, true  },
     //ImportGateway
     { "crosschain",       "importgatewayddress",     &importgatewayaddress,      true },
     { "crosschain",       "importgatewayinfo", &importgatewayinfo, true  },

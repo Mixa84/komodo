@@ -66,6 +66,8 @@ extern std::string ASSETCHAINS_SELFIMPORT;
 //std::string MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount, CMutableTransaction &mtx);
 //int32_t GetSelfimportProof(std::string source, CMutableTransaction &mtx, CScript &scriptPubKey, TxProof &proof, std::string rawsourcetx, int32_t &ivout, uint256 sourcetxid, uint64_t burnAmount);
 std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts);
+std::string MakeCodaBurnTx(uint64_t txfee, uint64_t burnAmount);
+std::string MakeCodaBurnMarkerTx(uint64_t txfee, std::string address, std::string data);
 
 UniValue assetchainproof(const UniValue& params, bool fHelp)
 {
@@ -847,6 +849,93 @@ UniValue importdual(const UniValue& params, bool fHelp)
         result.push_back(Pair("result", "success"));
         result.push_back(Pair("hex", hex));
     } else ERR_RESULT("couldnt importdual");
+    return result;
+}
+
+UniValue burndual(const UniValue& params, bool fHelp)
+{
+    UniValue result(UniValue::VOBJ);
+    CMutableTransaction mtx;
+    std::string hex,source; uint64_t burnAmount;
+
+    if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
+        throw runtime_error("burndual only works on -ac_import chains");
+    if (fHelp || params.size() < 4)
+        throw runtime_error("amount\n");
+
+    CCerror = "";
+    burnAmount = atof(params[0].get_str().c_str()) * COIN + 0.00000000499999;
+    source = ASSETCHAINS_SELFIMPORT;   //defaults to -ac_import=... param
+    if (source == "BEAM")
+    {
+        if (ASSETCHAINS_BEAMPORT == 0)
+            return(-1);
+        // confirm via ASSETCHAINS_BEAMPORT that burnTx/hash is a valid BEAM burn
+        // return(0);
+        return -1;
+    }
+    else if (source == "CODA")
+    {
+        if (ASSETCHAINS_CODAPORT == 0)
+            return(-1);
+        hex=MakeCodaBurnTx(0,burnAmount);
+        // confirm via ASSETCHAINS_CODAPORT that burnTx/hash is a valid CODA burn
+        // return(0);
+    }
+    else if (source == "PEGSCC")
+    {
+        return -1;
+    }
+    RETURN_IF_ERROR(CCerror);
+    if ( hex.size() > 0 )
+    {
+        result.push_back(Pair("result", "success"));
+        result.push_back(Pair("hex", hex));
+    } else ERR_RESULT("couldnt burndual");
+    return result;
+}
+
+UniValue markburndual(const UniValue& params, bool fHelp)
+{
+    UniValue result(UniValue::VOBJ);
+    CMutableTransaction mtx;
+    std::string hex,source,address,data;
+
+    if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
+        throw runtime_error("markburndual only works on -ac_import chains");
+    if (fHelp || params.size() < 4)
+        throw runtime_error("address hexdata\n");
+
+    CCerror = "";
+    address = params[0].get_str();
+    data = params[1].get_str();
+    source = ASSETCHAINS_SELFIMPORT;   //defaults to -ac_import=... param
+    if (source == "BEAM")
+    {
+        if (ASSETCHAINS_BEAMPORT == 0)
+            return(-1);
+        // confirm via ASSETCHAINS_BEAMPORT that burnTx/hash is a valid BEAM burn
+        // return(0);
+        return -1;
+    }
+    else if (source == "CODA")
+    {
+        if (ASSETCHAINS_CODAPORT == 0)
+            return(-1);
+        hex=MakeCodaBurnMarkerTx(0,address,data);
+        // confirm via ASSETCHAINS_CODAPORT that burnTx/hash is a valid CODA burn
+        // return(0);
+    }
+    else if (source == "PEGSCC")
+    {
+        return -1;
+    }
+    RETURN_IF_ERROR(CCerror);
+    if ( hex.size() > 0 )
+    {
+        result.push_back(Pair("result", "success"));
+        result.push_back(Pair("hex", hex));
+    } else ERR_RESULT("couldnt markburndual");
     return result;
 }
 

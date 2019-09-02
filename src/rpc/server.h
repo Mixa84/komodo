@@ -453,6 +453,8 @@ extern UniValue reconsiderblock(const UniValue& params, bool fHelp);
 extern UniValue getspentinfo(const UniValue& params, bool fHelp);
 extern UniValue selfimport(const UniValue& params, bool fHelp);
 extern UniValue importdual(const UniValue& params, bool fHelp);
+extern UniValue burndual(const UniValue& params, bool fHelp);
+extern UniValue markburndual(const UniValue& params, bool fHelp);
 extern UniValue importgatewayaddress(const UniValue& params, bool fHelp);
 extern UniValue importgatewayinfo(const UniValue& params, bool fHelp);
 extern UniValue importgatewaybind(const UniValue& params, bool fHelp);
