@@ -24,7 +24,7 @@
 
 #include "key_io.h"
 #define CODA_BURN_ADDRESS "KPrrRoPfHOnNpZZQ6laHXdQDkSQDkVHaN0V+LizLlHxz7NaA59sBAAAA"
-#define CODA_AC_BURN_ADDRESS ""
+#define CODA_AC_BURN_ADDRESS "RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPVMY"
 
 /*
  * CC Eval method for import coin.
@@ -294,7 +294,7 @@ std::string MakeCodaBurnTx(uint64_t txfee, uint64_t amount)
     {
         CTxDestination dest = DecodeDestination(CODA_AC_BURN_ADDRESS);
         CScript scriptPubKey = GetScriptForDestination(dest);
-        mtx.vout.push_back(CTxOut(amount,scriptPubKey));      
+        mtx.vout.push_back(CTxOut(amount,scriptPubKey));   
         return(FinalizeCCTx(0,cp,mtx,mypk,txfee,CScript()));
     }
     CCerror = strprintf("error adding funds for Coda burn tx");

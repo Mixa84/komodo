@@ -860,7 +860,7 @@ UniValue burndual(const UniValue& params, bool fHelp)
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
         throw runtime_error("burndual only works on -ac_import chains");
-    if (fHelp || params.size() < 4)
+    if (fHelp || params.size() < 1)
         throw runtime_error("amount\n");
 
     CCerror = "";
@@ -903,7 +903,7 @@ UniValue markburndual(const UniValue& params, bool fHelp)
 
     if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
         throw runtime_error("markburndual only works on -ac_import chains");
-    if (fHelp || params.size() < 4)
+    if (fHelp || params.size() < 2)
         throw runtime_error("address hexdata\n");
 
     CCerror = "";
