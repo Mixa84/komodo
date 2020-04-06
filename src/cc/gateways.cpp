@@ -787,7 +787,7 @@ UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction oracletx,tx; uint8_t taddr,prefix,prefix2,wiftype; CPubKey mypk,gatewayspk,regpk; CScript opret; uint256 hashBlock,txid,tmporacletxid;
-    struct CCcontract_info *cp,*cpTokens,C,CTokens; std::string name,description,format; int32_t i,numvouts,n=0; int64_t fullsupply,datafee;
+    struct CCcontract_info *cp,*cpTokens,C,CTokens; std::string name,description,format; int32_t i,numvouts,n=0; int64_t fullsupply,tmp,datafee;
     char destaddr[64],coinaddr[64],myTokenCCaddr[64],markeraddr[64],*fstr; std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
 
     cp = CCinit(&C,EVAL_GATEWAYS);
@@ -843,8 +843,8 @@ UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "token supply must be dividable by 100sat");
     if ( (fullsupply=CCfullsupply(tokenid)) != totalsupply )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "Gateway bind." << coin << " ("<< tokenid.GetHex() << ") globaladdr." <<cp->unspendableCCaddr << " totalsupply " << (double)totalsupply/COIN << " != fullsupply " << (double)fullsupply/COIN);
-    if ( CCtoken_balance(myTokenCCaddr,tokenid) != totalsupply )
-        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "token balance on " << myTokenCCaddr << " " << (double)CCtoken_balance((char *)myTokenCCaddr,tokenid)/COIN << "!=" << (double)totalsupply/COIN);
+    if ( (tmp=AddTokenCCInputs(cpTokens,mtx,mypk,tokenid,0,0)) != totalsupply )
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "token balance on " << myTokenCCaddr << " " << (double)tmp/COIN << "!=" << (double)totalsupply/COIN);
     if ( myGetTransaction(oracletxid,oracletx,hashBlock) == 0 || (numvouts= oracletx.vout.size()) <= 0 )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find oracletxid " << oracletxid.GetHex());
     if ( DecodeOraclesCreateOpRet(oracletx.vout[numvouts-1].scriptPubKey,name,description,format) != 'C' )
@@ -1390,13 +1390,12 @@ UniValue GatewaysDumpPrivKey(uint256 bindtxid,CKey key)
 UniValue GatewaysInfo(uint256 bindtxid)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    UniValue result(UniValue::VOBJ),a(UniValue::VARR); std::string coin; char str[67],numstr[65],depositaddr[64],gatewaystokens[64];
+    UniValue result(UniValue::VOBJ),a(UniValue::VARR); std::string coin; char str[67],numstr[65],depositaddr[64];
     uint8_t M,N; std::vector<CPubKey> pubkeys; uint8_t taddr,prefix,prefix2,wiftype; uint256 tokenid,oracletxid,hashBlock; CTransaction tx;
     CPubKey Gatewayspk; struct CCcontract_info *cp,C; int32_t i; int64_t numvouts,totalsupply,remaining; std::vector<CPubKey> msigpubkeys;
   
     cp = CCinit(&C,EVAL_GATEWAYS);
     Gatewayspk = GetUnspendable(cp,0);
-    GetTokensCCaddress(cp,gatewaystokens,Gatewayspk);
     if ( myGetTransaction(bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
     {   
         result.push_back(Pair("result","error"));
@@ -1431,7 +1430,7 @@ UniValue GatewaysInfo(uint256 bindtxid)
             result.push_back(Pair("tokenid",uint256_str(str,tokenid)));
             sprintf(numstr,"%.8f",(double)totalsupply/COIN);
             result.push_back(Pair("totalsupply",numstr));
-            remaining = CCtoken_balance(gatewaystokens,tokenid);
+            remaining = AddTokenCCInputs(cp,mtx,Gatewayspk,tokenid,0,0);
             sprintf(numstr,"%.8f",(double)remaining/COIN);
             result.push_back(Pair("remaining",numstr));
             sprintf(numstr,"%.8f",(double)(totalsupply - remaining)/COIN);
