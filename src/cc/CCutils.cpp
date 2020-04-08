@@ -156,6 +156,14 @@ bool IsCCInput(CScript const& scriptSig)
     return true;
 }
 
+bool ValidateNormalVins(Eval* eval, const CTransaction& tx,int32_t index)
+{
+    for (int i=index;i<tx.vin.size();i++)
+        if (IsCCInput(tx.vin[i].scriptSig) != 0 )
+            return eval->Invalid("vin."+std::to_string(i)+" is normal for this tx!");
+    return (true);
+}
+
 bool CheckTxFee(const CTransaction &tx, uint64_t txfee, uint32_t height, uint64_t blocktime, int64_t &actualtxfee)
 {
     LOCK(mempool.cs);

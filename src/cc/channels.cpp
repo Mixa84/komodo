@@ -94,12 +94,12 @@ int64_t IsChannelsMarkervout(struct CCcontract_info *cp,const CTransaction& tx,C
     return(0);
 }
 
-CScript EncodeChannelsOpRet(uint8_t funcid,uint256 tokenid,uint256 opentxid,CPubKey srcpub,CPubKey destpub,int32_t numpayments,int64_t payment,uint256 hashchain, uint8_t version, uint16_t confirmation)
+CScript EncodeChannelsOpRet(uint8_t funcid,uint8_t version,uint256 tokenid,uint256 opentxid,CPubKey srcpub,CPubKey destpub,int32_t numpayments,int64_t payment,uint256 hashchain,uint16_t confirmation)
 {
     CScript opret; uint8_t evalcode = EVAL_CHANNELS;
     vscript_t vopret;
 
-    vopret = E_MARSHAL(ss << evalcode << funcid << opentxid << srcpub << destpub << numpayments << payment << hashchain << version << confirmation);
+    vopret = E_MARSHAL(ss << evalcode << funcid << version << opentxid << srcpub << destpub << numpayments << payment << hashchain << confirmation);
     if (tokenid!=zeroid)
     {
         std::vector<CPubKey> pks;
@@ -111,7 +111,7 @@ CScript EncodeChannelsOpRet(uint8_t funcid,uint256 tokenid,uint256 opentxid,CPub
     return(opret);
 }
 
-uint8_t DecodeChannelsOpRet(const CScript &scriptPubKey, uint256 &tokenid, uint256 &opentxid, CPubKey &srcpub,CPubKey &destpub,int32_t &numpayments,int64_t &payment,uint256 &hashchain, uint8_t &version, uint16_t &confirmation)
+uint8_t DecodeChannelsOpRet(const CScript &scriptPubKey, uint8_t &version, uint256 &tokenid, uint256 &opentxid, CPubKey &srcpub,CPubKey &destpub,int32_t &numpayments,int64_t &payment,uint256 &hashchain, uint16_t &confirmation)
 {
     std::vector<vscript_t>  oprets;
     std::vector<uint8_t> vopret, vOpretExtra; uint8_t *script,e,f;
@@ -127,7 +127,7 @@ uint8_t DecodeChannelsOpRet(const CScript &scriptPubKey, uint256 &tokenid, uint2
     if ( vopret.size() > 2 )
     {
         script = (uint8_t *)vopret.data();
-        if ( script[0] == EVAL_CHANNELS && E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> opentxid; ss >> srcpub; ss >> destpub; ss >> numpayments; ss >> payment; ss >> hashchain; ss >> version; ss >> confirmation) != 0 )
+        if ( script[0] == EVAL_CHANNELS && E_UNMARSHAL(vopret,ss >> e; ss >> f;  ss >> version; ss >> opentxid; ss >> srcpub; ss >> destpub; ss >> numpayments; ss >> payment; ss >> hashchain; ss >> confirmation) != 0 )
         {
             return(f);
         }
@@ -143,7 +143,7 @@ bool ChannelsExactAmounts(Eval* eval,const CTransaction &tx)
     int32_t param1,numvouts; int64_t param2; uint8_t funcid,version;
     CTransaction vinTx; uint256 hashBlock; int64_t inputs=0,outputs=0;
 
-    if ((numvouts=tx.vout.size()) > 0 && (funcid=DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey, tokenid, txid, srcpub, destpub, param1, param2, param3, version, confirmation))!=0)
+    if ((numvouts=tx.vout.size()) > 0 && (funcid=DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey, version, tokenid, txid, srcpub, destpub, param1, param2, param3, confirmation))!=0)
     {        
         switch (funcid)
         {
@@ -230,18 +230,10 @@ bool ValidateChannelCloseTx(Eval* eval, uint256 closetxid, uint256 opentxid)
     
     if (myGetTransaction(closetxid,tx,hashblock)==0 || (numvouts=tx.vout.size())<1)
         return eval->Invalid("invalid channelsclose tx");
-    else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey, tokenid, tmptxid, srcpub, destpub, param1, param2, param3, version, tmp)!='C')
+    else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey, version, tokenid, tmptxid, srcpub, destpub, param1, param2, param3, tmp)!='C')
         return eval->Invalid("invalid channelsclose OP_RETURN data");
     else if (tmptxid!=opentxid)
         return eval->Invalid("invalid channelsclose not matching this channelsopen txid");
-    return (true);
-}
-
-bool ValidateNormalVins(Eval* eval, const CTransaction& tx,int32_t index)
-{
-    for (int i=index;i<tx.vin.size();i++)
-        if (IsCCInput(tx.vin[i].scriptSig) != 0 )
-            return eval->Invalid("vin."+std::to_string(i)+" is normal for channel tx!");
     return (true);
 }
 
@@ -254,7 +246,7 @@ bool ValidateChannelVin(struct CCcontract_info *cp,Eval* eval, const CTransactio
         return eval->Invalid("vin."+std::to_string(index)+" is channel CC for channel tx!");
     else if (myGetTransaction(tx.vin[index].prevout.hash,prevTx,hashblock) == 0)
         return eval->Invalid("vin."+std::to_string(index)+" tx does not exist!");
-    else if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, version, tmp) == 0) 
+    else if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, version, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, tmp) == 0) 
         return eval->Invalid("invalid vin."+std::to_string(index)+" tx OP_RETURN data!");
     else if (fromaddr!=0 && Getscriptaddress(tmpaddr,prevTx.vout[tx.vin[index].prevout.n].scriptPubKey) && strcmp(tmpaddr,fromaddr)!=0)
         return eval->Invalid("invalid vin."+std::to_string(index)+" address!");
@@ -288,11 +280,11 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
         {
             return (false);            
         }          
-        if ( (funcid = DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey, tokenid, opentxid, srcpub, destpub, param1, param2, param3, version, tmp)) != 0)
+        if ( (funcid = DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey, version, tokenid, opentxid, srcpub, destpub, param1, param2, param3, tmp)) != 0)
         {
             if (myGetTransaction(opentxid,channelOpenTx,hashblock)== 0)
                 return eval->Invalid("invalid channelopen tx!");
-            else if ((channelOpenTx.vout.size()) > 0 && (DecodeChannelsOpRet(channelOpenTx.vout[channelOpenTx.vout.size()-1].scriptPubKey, tmptokenid, tmp_txid, srcpub, destpub, numpayments, payment, hashchain, version, confirmation)) != 'O')
+            else if ((channelOpenTx.vout.size()) > 0 && (DecodeChannelsOpRet(channelOpenTx.vout[channelOpenTx.vout.size()-1].scriptPubKey, version, tmptokenid, tmp_txid, srcpub, destpub, numpayments, payment, hashchain, confirmation)) != 'O')
                 return eval->Invalid("invalid channelopen OP_RETURN data!");
             else if (tmptokenid!=tokenid)
                 return eval->Invalid("invalid different tokenid in channelsopen and current tx!");
@@ -380,7 +372,7 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                             return eval->Invalid("invalid secret for payment, does not reach final hashchain!");
                         if (myGetTransaction(tx.vin[0].prevout.hash,prevTx,hashblock) != 0)
                         {
-                            if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, version, tmp) == 0)
+                            if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, version, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, tmp) == 0)
                                 return eval->Invalid("invalid previous tx OP_RETURN data!");
                             else if ( ConstrainVout(tx.vout[0],1,channeladdress,(p1-param2)*payment)==0 )
                                 return eval->Invalid("vout.0 is CC for channelpayment or invalid CC change amount!");
@@ -426,7 +418,7 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                         return eval->Invalid("invalid payment size in OP_RETURN data for channelsclose tx!");
                     else if (myGetTransaction(tx.vin[0].prevout.hash,prevTx,hashblock) != 0)
                     {
-                        if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, version, tmp) == 0)
+                        if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, version, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, tmp) == 0)
                             return eval->Invalid("invalid previous tx OP_RETURN data!");
                         else if (tx.vout[0].nValue != prevTx.vout[0].nValue)
                             return eval->Invalid("invalid CC amount, amount must match funds in channel");
@@ -475,7 +467,7 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                         return eval->Invalid("invalid payment size in OP_RETURN data for channelsrefund tx!");
                     else if (myGetTransaction(tx.vin[0].prevout.hash,prevTx,hashblock) != 0)
                     {
-                        if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, version, tmp) == 0)
+                        if ((numvouts=prevTx.vout.size()) > 0 && DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, version, tokenid, tmp_txid, srcpub, destpub, p1, p2, p3, tmp) == 0)
                             return eval->Invalid("invalid previous tx OP_RETURN data!");
                         else if (tx.vout[0].nValue != prevTx.vout[0].nValue)
                             return eval->Invalid("invalid amount, refund amount and funds in channel must match!");
@@ -500,7 +492,7 @@ int64_t AddChannelsInputs(struct CCcontract_info *cp,CMutableTransaction &mtx, C
     char coinaddr[65],funcid; int64_t param2,totalinputs = 0,numvouts; uint256 txid=zeroid,tmp_txid,hashBlock,param3,tokenid; CTransaction tx; int32_t marker,param1;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CPubKey srcpub,destpub; uint8_t myprivkey[32],version; uint16_t confirmation;
 
-    if ((numvouts=openTx.vout.size()) > 0 && DecodeChannelsOpRet(openTx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,version,confirmation)=='O')
+    if ((numvouts=openTx.vout.size()) > 0 && DecodeChannelsOpRet(openTx.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,confirmation)=='O')
     {
         if (tokenid!=zeroid) GetTokensCCaddress1of2(cp,coinaddr,srcpub,destpub);
         else GetCCaddress1of2(cp,coinaddr,srcpub,destpub);
@@ -517,7 +509,7 @@ int64_t AddChannelsInputs(struct CCcontract_info *cp,CMutableTransaction &mtx, C
     {
         if ( (int32_t)it->first.index==0 && myGetTransaction(it->first.txhash,tx,hashBlock) != 0 && (numvouts=tx.vout.size()) > 0)
         {
-            if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,version,confirmation)!=0 &&
+            if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,confirmation)!=0 &&
               (tmp_txid==openTx.GetHash() || tx.GetHash()==openTx.GetHash()) && IsChannelsMarkervout(cp,tx,marker==1?srcpub:destpub,marker)>0 &&
               (totalinputs=IsChannelsvout(cp,tx,srcpub,destpub,0))>0)
             {
@@ -537,7 +529,7 @@ int64_t AddChannelsInputs(struct CCcontract_info *cp,CMutableTransaction &mtx, C
             const CTransaction &txmempool = *it;
             const uint256 &hash = txmempool.GetHash();
 
-            if ((numvouts=txmempool.vout.size()) > 0 && (funcid=DecodeChannelsOpRet(txmempool.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,version,confirmation))!=0 && (funcid=='P' || funcid=='C') &&
+            if ((numvouts=txmempool.vout.size()) > 0 && (funcid=DecodeChannelsOpRet(txmempool.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,confirmation))!=0 && (funcid=='P' || funcid=='C') &&
               tmp_txid==openTx.GetHash() && param1 < mindepth)
             {
                 txid=hash;
@@ -601,7 +593,7 @@ UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t n
         mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,mypk));
         mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
         if (tokenid!=zeroid && tokens>=funds) mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS,tokens-funds,mypk));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('O',tokenid,zeroid,mypk,destpub,numpayments,payment,hashchain,CHANNELCC_VERSION,confirmation)));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('O',CHANNELCC_VERSION,tokenid,zeroid,mypk,destpub,numpayments,payment,hashchain,confirmation)));
     }
     CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding funds");
 }
@@ -623,7 +615,7 @@ UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid payment amount, must be greater than 0");
     if (myGetTransaction(opentxid,channelOpenTx,hashblock) == 0) 
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open txid");
-    if ((numvouts=channelOpenTx.vout.size()) > 0 && DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey, tokenid, txid, srcpub, destpub, totalnumpayments, payment, hashchain, version, confirmation)=='O')
+    if ((numvouts=channelOpenTx.vout.size()) > 0 && DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey, version, tokenid, txid, srcpub, destpub, totalnumpayments, payment, hashchain, confirmation)=='O')
     {
         if (mypk != srcpub && mypk != destpub) 
             CCERR_RESULT("channelscc",CCLOG_INFO, stream << "this is not our channel");
@@ -641,7 +633,7 @@ UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64
         {            
             numpayments=amount/payment;
             if (myGetTransaction(prevtxid,prevTx,hashblock) != 0 && (numvouts=prevTx.vout.size()) > 0 &&
-                ((funcid = DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, txid, srcpub, destpub, prevdepth, param2, param3, tmpv, tmpc)) != 0) &&
+                ((funcid = DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tmpv, tokenid, txid, srcpub, destpub, prevdepth, param2, param3, tmpc)) != 0) &&
                 (funcid == 'O' || funcid=='P' || funcid=='C'))
             {
                 if (numpayments > prevdepth)
@@ -683,7 +675,7 @@ UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64
             mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
             if (tokenid!=zeroid) mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS, amount, destpub));
             else mtx.vout.push_back(CTxOut(amount, CScript() << ParseHex(HexStr(destpub)) << OP_CHECKSIG));
-            return (FinalizeCCTxExt(pk.IsValid(), 0, cp, mtx, mypk, txfee, EncodeChannelsOpRet('P', tokenid, opentxid, srcpub, destpub, prevdepth-numpayments, numpayments, secret, CHANNELCC_VERSION, confirmation)));
+            return (FinalizeCCTxExt(pk.IsValid(), 0, cp, mtx, mypk, txfee, EncodeChannelsOpRet('P', CHANNELCC_VERSION, tokenid, opentxid, srcpub, destpub, prevdepth-numpayments, numpayments, secret, confirmation)));
         }
         else CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding normal inputs");
     }
@@ -704,7 +696,7 @@ UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid)
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     if (myGetTransaction(opentxid,channelOpenTx,hashblock) == 0) 
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open txid");
-    if ((numvouts=channelOpenTx.vout.size()) < 1 || DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,numpayments,payment,hashchain,version,confirmation)!='O')
+    if ((numvouts=channelOpenTx.vout.size()) < 1 || DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,numpayments,payment,hashchain,confirmation)!='O')
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open tx");
     if (mypk != srcpub)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "cannot close, you are not channel owner");
@@ -716,7 +708,7 @@ UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid)
             else mtx.vout.push_back(MakeCC1of2vout(EVAL_CHANNELS, funds, mypk, destpub));
             mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,mypk));
             mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
-            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('C',tokenid,opentxid,mypk,destpub,funds/payment,payment,zeroid,CHANNELCC_VERSION,confirmation)));
+            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('C',CHANNELCC_VERSION,tokenid,opentxid,mypk,destpub,funds/payment,payment,zeroid,confirmation)));
         }
         else
             CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding normal inputs");
@@ -740,13 +732,13 @@ UniValue ChannelRefund(const CPubKey& pk, uint64_t txfee,uint256 opentxid,uint25
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     if (myGetTransaction(opentxid,channelOpenTx,hashblock) == 0)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open txid");
-    if ((numvouts=channelOpenTx.vout.size()) < 1 || DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey,tokenid,txid,srcpub,destpub,numpayments,payment,hashchain,version,confirmation)!='O')
+    if ((numvouts=channelOpenTx.vout.size()) < 1 || DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey,version,tokenid,txid,srcpub,destpub,numpayments,payment,hashchain,confirmation)!='O')
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open tx");
     if (komodo_txnotarizedconfirmed(opentxid,confirmation)==false)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "channelsopen tx not yet confirmed/notarized");
     if (myGetTransaction(closetxid,channelCloseTx,hashblock) == 0)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel close txid");
-    if ((numvouts=channelCloseTx.vout.size()) < 1 || DecodeChannelsOpRet(channelCloseTx.vout[numvouts-1].scriptPubKey,tokenid,txid,srcpub,destpub,param1,param2,param3,tmpv,tmpc)!='C')
+    if ((numvouts=channelCloseTx.vout.size()) < 1 || DecodeChannelsOpRet(channelCloseTx.vout[numvouts-1].scriptPubKey,tmpv,tokenid,txid,srcpub,destpub,param1,param2,param3,tmpc)!='C')
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel close tx");
     if (komodo_txnotarizedconfirmed(closetxid,confirmation)==false)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "channelsclose tx not yet confirmed/notarized");
@@ -759,13 +751,13 @@ UniValue ChannelRefund(const CPubKey& pk, uint64_t txfee,uint256 opentxid,uint25
         if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) >= txfee+CC_MARKER_VALUE )
         {
             if ((myGetTransaction(prevtxid,prevTx,hashblock) != 0) && (numvouts=prevTx.vout.size()) > 0 &&
-                DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, txid, srcpub, destpub, param1, param2, param3,tmpv,tmpc) != 0)
+                DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tmpv, tokenid, txid, srcpub, destpub, param1, param2, param3, tmpc) != 0)
             {
                 if (tokenid!=zeroid) mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS,funds,mypk));
                 else mtx.vout.push_back(CTxOut(funds,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
                 mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,mypk));
                 mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
-                return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('R',tokenid,opentxid,mypk,destpub,funds/payment,payment,closetxid,CHANNELCC_VERSION,confirmation)));
+                return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('R',CHANNELCC_VERSION,tokenid,opentxid,mypk,destpub,funds/payment,payment,closetxid,confirmation)));
             }
             else
                 CCERR_RESULT("channelscc",CCLOG_INFO, stream << "previous tx is invalid");
@@ -792,7 +784,7 @@ UniValue ChannelGenerateSecret(const CPubKey& pk,uint256 opentxid,int64_t amount
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid payment amount, must be greater than 0");
     if (myGetTransaction(opentxid,channelOpenTx,hashblock) == 0) 
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open txid");
-    if ((numvouts=channelOpenTx.vout.size()) > 0 && DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey, tokenid, txid, srcpub, destpub, totalnumpayments, payment, hashchain, version, confirmation)=='O')
+    if ((numvouts=channelOpenTx.vout.size()) > 0 && DecodeChannelsOpRet(channelOpenTx.vout[numvouts-1].scriptPubKey, version, tokenid, txid, srcpub, destpub, totalnumpayments, payment, hashchain, confirmation)=='O')
     {
         if (mypk != srcpub) 
             CCERR_RESULT("channelscc",CCLOG_INFO, stream << "this is not our channel");
@@ -804,7 +796,7 @@ UniValue ChannelGenerateSecret(const CPubKey& pk,uint256 opentxid,int64_t amount
     if ((funds=AddChannelsInputs(cp,mtx,channelOpenTx,prevtxid,mypk)) !=0 && (change=funds-amount)>=0)
     {      
         if (myGetTransaction(prevtxid,prevTx,hashblock) != 0 && (numvouts=prevTx.vout.size()) > 0 &&
-            ((funcid = DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tokenid, txid, srcpub, destpub, prevdepth, param2, param3, tmpv, tmpc)) != 0) &&
+            ((funcid = DecodeChannelsOpRet(prevTx.vout[numvouts-1].scriptPubKey, tmpv, tokenid, txid, srcpub, destpub, prevdepth, param2, param3, tmpc)) != 0) &&
             (funcid == 'O' || funcid=='P' || funcid=='C'))
         {
             if (numpayments > prevdepth)
@@ -848,7 +840,7 @@ UniValue ChannelsList(const CPubKey& pk)
         txid = *it;
         if ( myGetTransaction(txid,tx,hashBlock) != 0 && (numvouts= tx.vout.size()) > 0 )
         {
-            if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,version,confirmation) == 'O')
+            if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,confirmation) == 'O')
             {                
                 sprintf(str,"%lld payments of %lld satoshi to %s",(long long)param1,(long long)param2,pubkey33_str(pub,(uint8_t *)&destpub));                
                 result.push_back(Pair(txid.GetHex().data(),str));
@@ -869,7 +861,7 @@ UniValue ChannelsInfo(const CPubKey& pk,uint256 channeltxid)
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     
     if (myGetTransaction(channeltxid,tx,hashBlock) != 0 && (numvouts= tx.vout.size()) > 0 &&
-        (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,opentxid,srcpub,destpub,param1,param2,param3,version,confirmation) == 'O'))
+        (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,opentxid,srcpub,destpub,param1,param2,param3,confirmation) == 'O'))
     {    
         GetCCaddress1of2(cp,CCaddr,srcpub,destpub);
         Getscriptaddress(addr,CScript() << ParseHex(HexStr(destpub)) << OP_CHECKSIG);
@@ -893,7 +885,7 @@ UniValue ChannelsInfo(const CPubKey& pk,uint256 channeltxid)
         for (std::vector<uint256>::const_iterator it=txids.begin(); it!=txids.end(); it++)
         {
             if (myGetTransaction(*it,tx,hashBlock) != 0 && (numvouts= tx.vout.size()) > 0 &&
-                DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,tmpv,tmpc)!=0 && (tmp_txid==channeltxid || tx.GetHash()==channeltxid))
+                DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tmpv,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,tmpc)!=0 && (tmp_txid==channeltxid || tx.GetHash()==channeltxid))
                     txs.push_back(tx);               
         }
         std::vector<CTransaction> tmp_txs;
@@ -902,7 +894,7 @@ UniValue ChannelsInfo(const CPubKey& pk,uint256 channeltxid)
         {
             const CTransaction &txmempool = *it;
 
-            if ((numvouts=txmempool.vout.size()) > 0 && txmempool.vout[1].nValue==CC_MARKER_VALUE && (funcid=DecodeChannelsOpRet(txmempool.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,tmpv,tmpc)) != 0 && (funcid=='P' || funcid=='C') && tmp_txid==channeltxid)
+            if ((numvouts=txmempool.vout.size()) > 0 && txmempool.vout[1].nValue==CC_MARKER_VALUE && (funcid=DecodeChannelsOpRet(txmempool.vout[numvouts-1].scriptPubKey,tmpv,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,tmpc)) != 0 && (funcid=='P' || funcid=='C') && tmp_txid==channeltxid)
                 txs.push_back(txmempool);                
         }
         for (std::vector<CTransaction>::const_iterator it=txs.begin(); it!=txs.end(); it++)
@@ -911,14 +903,14 @@ UniValue ChannelsInfo(const CPubKey& pk,uint256 channeltxid)
             if ((numvouts= tx.vout.size()) > 0 )
             {
                 UniValue obj(UniValue::VOBJ);               
-                if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,version,confirmation) == 'O' && tx.GetHash()==channeltxid)
+                if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,confirmation) == 'O' && tx.GetHash()==channeltxid)
                 {
                     obj.push_back(Pair("Open",tx.GetHash().GetHex().data()));
                 }
-                else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,opentxid,srcpub,destpub,param1,param2,param3,tmpv,tmpc) == 'P' && opentxid==channeltxid)
+                else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tmpv,tokenid,opentxid,srcpub,destpub,param1,param2,param3,tmpc) == 'P' && opentxid==channeltxid)
                 {
                     if (myGetTransaction(opentxid,opentx,hashBlock) != 0 && (numvouts=opentx.vout.size()) > 0 &&
-                            DecodeChannelsOpRet(opentx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,numpayments,payment,hashchain,version,confirmation) == 'O')
+                            DecodeChannelsOpRet(opentx.vout[numvouts-1].scriptPubKey,version,tokenid,tmp_txid,srcpub,destpub,numpayments,payment,hashchain,confirmation) == 'O')
                     {
                         Getscriptaddress(str,tx.vout[3].scriptPubKey);  
                         obj.push_back(Pair("Payment",tx.GetHash().GetHex().data()));
@@ -929,11 +921,11 @@ UniValue ChannelsInfo(const CPubKey& pk,uint256 channeltxid)
                         obj.push_back(Pair("Payments left",param1));
                     }
                 }
-                else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,opentxid,srcpub,destpub,param1,param2,param3,tmpv,tmpc) == 'C' && opentxid==channeltxid)
+                else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tmpv,tokenid,opentxid,srcpub,destpub,param1,param2,param3,tmpc) == 'C' && opentxid==channeltxid)
                 {
                     obj.push_back(Pair("Close",tx.GetHash().GetHex().data()));
                 }
-                else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tokenid,opentxid,srcpub,destpub,param1,param2,param3,tmpv,tmpc) == 'R' && opentxid==channeltxid)
+                else if (DecodeChannelsOpRet(tx.vout[numvouts-1].scriptPubKey,tmpv,tokenid,opentxid,srcpub,destpub,param1,param2,param3,tmpc) == 'R' && opentxid==channeltxid)
                 {
                     Getscriptaddress(str,tx.vout[2].scriptPubKey);                        
                     obj.push_back(Pair("Refund",tx.GetHash().GetHex().data()));                        
