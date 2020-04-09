@@ -543,6 +543,19 @@ bool ValidateGatewaysVin(struct CCcontract_info *cp,Eval* eval, const CTransacti
     return (true);
 }
 
+int32_t ValidateGatewaysTokensInputs(struct CCcontract_info *cp,Eval* eval, const CTransaction& tx,int32_t index, uint256 bindtxid)
+{
+    char tokensaddr[64]; int32_t i=0;
+
+    GetTokensCCaddress(cp,tokensaddr,GetUnspendable(cp,0));
+    while (i<tx.vin.size() && (cp->ismyvin)(tx.vin[i].scriptSig) != 0)
+    {
+        if (ValidateGatewaysVin(cp,eval,tx,i,bindtxid,tokensaddr,0) != 0) i++;
+        else return 0;
+    }
+    return (i);
+}
+
 bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &tx, uint32_t nIn)
 {
     int32_t numvins,numvouts,preventCCvins,preventCCvouts,i,height,claimvout; bool retval; uint8_t version,tmpv,funcid,K,tmpK,M,N,taddr,prefix,prefix2,wiftype;
@@ -575,7 +588,10 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                     return eval->Invalid("unexpected GatewaysValidate for gatewaysbind!");
                     break;
                 case 'D':
-                    //vin.0: normal input
+                    //vin.0: CC gateways tokens input
+                    //...
+                    //vin.m: normal inputs
+                    //...
                     //vout.0: CC vout of tokens from deposit amount to destination pubkey
                     //vout.1: normal output marker to txidaddr                           
                     //vout.2: CC vout change of gateways tokens to gateways tokens CC address (if any)  
@@ -587,16 +603,18 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                         return eval->Invalid("invalid gatewaysdeposit OP_RETURN data!");
                     else if ( CCCointxidExists("gatewayscc-1",tx.GetHash(),cointxid) != 0 )
                         return eval->Invalid("cointxid " + cointxid.GetHex() + " already processed with gatewaysdeposit!");
-                    else if ( ValidateNormalVins(eval,tx,0) != 0 )
+                    else if ( (i=ValidateGatewaysTokensInputs(cp,eval,tx,0,bindtxid)) == 0 )
+                        return (false);
+                    else if ( ValidateNormalVins(eval,tx,i) != 0 )
                         return (false);
                     else if (_GetCCaddress(destaddr,EVAL_TOKENS,pubkey)==0 || ConstrainVout(tx.vout[0],1,destaddr,amount)==0)
-                        return eval->Invalid("invalid vout tokens to destpub for gatewaysdeposit!");
+                        return eval->Invalid("invalid vout.0 tokens to destpub for gatewaysdeposit!");
                     else if ( CCtxidaddr(destaddr,cointxid)==CPubKey() || ConstrainVout(tx.vout[1],0,destaddr,CC_MARKER_VALUE)==0)
-                        return eval->Invalid("invalid marker vout for gatewaysdeposit!");
+                        return eval->Invalid("invalid marker vout.1 for gatewaysdeposit!");
                     else if ((GetTokensCCaddress(cp,destaddr,gatewayspk)==0 || ConstrainVout(tx.vout[2],1,destaddr,0)==0))
-                        return eval->Invalid("invalid vout tokens change to gateways global address for gatewaysdeposit!");
+                        return eval->Invalid("invalid vout.2 tokens change to gateways global address for gatewaysdeposit!");
                     else if ( ConstrainVout(tx.vout[3],0,0,0)==0 )
-                        return eval->Invalid("vout.4 is normal change for gatewaysdeposit!");
+                        return eval->Invalid("vout.3 is normal change for gatewaysdeposit!");
                     else if (!pubkey.IsFullyValid())
                         return eval->Invalid("invalid deposit tx destination pubkey for gatewaysdeposit");
                     else if (myGetTransaction(bindtxid,tmptx,hashblock) == 0)
@@ -609,10 +627,10 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                         return eval->Invalid("refcoin different than in bind tx for gatewasydeposit");
                     else if (tmptokenid!=tokenid)
                         return eval->Invalid("tokenid different than in bind tx for gatewasydeposit");
-                    else if (komodo_txnotarizedconfirmed(bindtxid) == false)
-                        return eval->Invalid("gatewaysbind tx is not yet confirmed(notarised)!");
                     else if (amount>totalsupply)
                         return eval->Invalid("deposit amount greater then bind total supply for gatewasydeposit");                        
+                    else if (komodo_txnotarizedconfirmed(bindtxid) == false)
+                        return eval->Invalid("gatewaysbind tx is not yet confirmed(notarised)!");
                     else 
                     {
                         int32_t m;                            
@@ -874,7 +892,7 @@ UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256
     if ( DecodeOraclesCreateOpRet(oracletx.vout[numvouts-1].scriptPubKey,name,description,format) != 'C' )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid oraclescreate opret data");
     if ( name!=coin )
-        CCERR_RESULT("importgateway",CCLOG_ERROR, stream << "mismatched oracle name "<<name<<" != " << coin);
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "mismatched oracle name "<<name<<" != " << coin);
     if ( (fstr=(char *)format.c_str()) == 0 || strncmp(fstr,"IhhL",3) != 0 )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "illegal format (" << fstr << ") != (IhhL)");
     if ( GatewaysBindExists(cp,gatewayspk,tokenid) != 0 )
@@ -909,8 +927,6 @@ UniValue GatewaysDeposit(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,int3
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find bindtxid " << bindtxid.GetHex());
     if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid coin - bindtxid " << bindtxid.GetHex() << " coin." << coin);
-    if (komodo_txnotarizedconfirmed(bindtxid)==false)
-        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "gatewaysbind tx not yet confirmed/notarized");
     if (!destpub.IsFullyValid())
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "destination pubkey is invalid");
     n = (int32_t)pubkeys.size();
@@ -936,18 +952,20 @@ UniValue GatewaysDeposit(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,int3
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cointxid." << cointxid.GetHex() << " already processed with gatewaysdeposit");
     if ( GatewaysVerify(depositaddr,oracletxid,claimvout,coin,cointxid,deposithex,proof,merkleroot,destpub,taddr,prefix,prefix2) != amount )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "deposittxid didnt validate");
-    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) >= txfee+CC_MARKER_VALUE )
+    if (komodo_txnotarizedconfirmed(bindtxid)==false)
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "gatewaysbind tx not yet confirmed/notarized");
+    if ((inputs=AddGatewaysInputs(cp, mtx, gatewayspk, bindtxid, amount, 60)) >= amount)
     {
-        if ((inputs=AddGatewaysInputs(cp, mtx, gatewayspk, bindtxid, amount, 60)) >= amount)
+        if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) >= txfee+CC_MARKER_VALUE )
         {
             mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS,amount,destpub));
             mtx.vout.push_back(CTxOut(CC_MARKER_VALUE,CScript() << ParseHex(HexStr(CCtxidaddr(txidaddr,cointxid))) << OP_CHECKSIG));
             if ( inputs > amount ) mtx.vout.push_back(MakeTokensCC1vout(cp->evalcode,inputs-amount,gatewayspk)); 
             return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeGatewaysDepositOpRet('D',GATEWAYSCC_VERSION,tokenid,bindtxid,coin,publishers,txids,height,cointxid,claimvout,deposithex,proof,destpub,amount)));
         }
-        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find enough token inputs from gateway");
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find enough inputs");
     }
-    CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find enough inputs");
+    CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find enough token inputs from gateway");
 }
 
 UniValue GatewaysWithdraw(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,std::string refcoin,CPubKey withdrawpub,int64_t amount)
