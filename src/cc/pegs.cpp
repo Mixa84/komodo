@@ -100,7 +100,7 @@ pegs CC is able to create a coin backed (by any supported coin with gateways CC 
 #define CC_TXFEE 10000
 
 extern uint64_t ASSETCHAINS_PEGSCCPARAMS[3];
-extern uint8_t DecodeGatewaysBindOpRet(char *depositaddr,const CScript &scriptPubKey,uint8_t& version,uint256 &tokenid,std::string &coin,int64_t &totalsupply,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &gatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype);
+extern uint8_t DecodeGatewaysBindOpRet(char *depositaddr,const CScript &scriptPubKey,uint8_t& version,CPubKey& mypk,uint256 &tokenid,std::string &coin,int64_t &totalsupply,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &gatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype);
 // see include extern int64_t GetTokenBalance(CPubKey pk, uint256 tokenid);
 extern int32_t komodo_currentheight();
 extern int32_t prices_syntheticvec(std::vector<uint16_t> &vec, std::vector<std::string> synthetic);
@@ -797,7 +797,7 @@ int64_t AddPegsTokenInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,u
 UniValue PegsCreate(const CPubKey& pk,uint64_t txfee,int64_t amount, std::vector<uint256> bindtxids)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());  std::vector<uint8_t> vorigpubkey;
-    CPubKey mypk,pegspk; struct CCcontract_info *cp,C; CTransaction tx; int32_t numvouts; int64_t totalsupply; std::string coin,name,description;
+    CPubKey mypk,tmppk,pegspk; struct CCcontract_info *cp,C; CTransaction tx; int32_t numvouts; int64_t totalsupply; std::string coin,name,description;
     char depositaddr[64]; uint256 txid,hashBlock,tmptokenid,oracletxid; uint8_t version,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> pubkeys;
 
     cp = CCinit(&C,EVAL_PEGS);
@@ -809,7 +809,7 @@ UniValue PegsCreate(const CPubKey& pk,uint64_t txfee,int64_t amount, std::vector
     {
         if (myGetTransaction(txid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find bindtxid " << txid.GetHex());
-        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmppk,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "invalid bindtxid " << txid.GetHex());
         if (myGetTransaction(tmptokenid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find tokenid " << txid.GetHex());
@@ -850,7 +850,7 @@ UniValue PegsFund(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tok
     {
         if (myGetTransaction(txid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find bindtxid " << txid.GetHex());
-        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmppk,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
         CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "invalid bindtxid " << txid.GetHex());
         if (tmptokenid==tokenid)
         {
@@ -978,7 +978,7 @@ UniValue PegsRedeem(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 t
     {
         if (myGetTransaction(txid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find bindtxid " << txid.GetHex());
-        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmppk,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "invalid bindtxid " << txid.GetHex());
         if (tmptokenid==tokenid)
         {
@@ -1044,7 +1044,7 @@ UniValue PegsClose(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 to
     {
         if (myGetTransaction(txid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find bindtxid " << txid.GetHex());
-        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmppk,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "invalid bindtxid " << txid.GetHex());
         if (tmptokenid==tokenid)
         {
@@ -1115,7 +1115,7 @@ UniValue PegsExchange(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256
     {
         if (myGetTransaction(txid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find bindtxid " << txid.GetHex());
-        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmppk,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "invalid bindtxid " << txid.GetHex());
         if (tmptokenid==tokenid)
         {
@@ -1203,7 +1203,7 @@ UniValue PegsLiquidate(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint25
     {
         if (myGetTransaction(txid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "cant find bindtxid " << txid.GetHex());
-        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+        if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tmppk,tmptokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
             CCERR_RESULT("pegscc",CCLOG_ERROR, stream << "invalid bindtxid " << txid.GetHex());
         if (tmptokenid==tokenid)
         {
