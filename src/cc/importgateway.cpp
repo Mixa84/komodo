@@ -325,7 +325,7 @@ bool ImportGatewayValidate(struct CCcontract_info *cp,Eval *eval,const CTransact
                             return eval->Invalid("invalid last txid!");
                         else if (lasttxid!=withdrawtxid && (numvouts=tx.vout.size()) > 0 && DecodeImportGatewayWithdrawSignOpRet(tx.vout[numvouts-1].scriptPubKey,tmpwithdrawtxid,tmplasttxid,tmpsigningpubkeys,tmprefcoin,tmpK,tmphex)!='S')
                             return eval->Invalid("invalid last importgatewaywithdrawsign OP_RETURN data!");
-                        else if (lasttxid!=withdrawtxid && CompareHexVouts(hex,tmphex)==0)
+                        else if (lasttxid!=withdrawtxid && CompareHexTx(hex,tmphex)==0)
                             return eval->Invalid("invalid importgatewaywithdrawsign, modifying initial tx vouts in hex!");
                         else if (myGetTransaction(withdrawtxid,tmptx,hashblock) == 0)
                             return eval->Invalid("invalid importgatewaywithdraw txid!");

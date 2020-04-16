@@ -605,7 +605,7 @@ int32_t CClib_initcp(struct CCcontract_info *cp,uint8_t evalcode);
 /// @returns true if the scriptSig object contains a cryptocondition
 bool IsCCInput(CScript const& scriptSig);
 
-bool ValidateNormalVins(Eval* eval, const CTransaction& tx,int32_t index);
+bool ValidateNormalVins(Eval* eval, const CTransaction& tx,int32_t index, char *srcaddr);
 
 /// CheckTxFee checks if queried transaction fee value is not less than the actual transaction fee of a real transaction
 /// @param tx transaction object which actual txfee to check
@@ -740,7 +740,7 @@ int64_t CCOraclesGetDepositBalance(char const *logcategory,uint256 reforacletxid
 /// @private
 int32_t CCCointxidExists(char const *logcategory,uint256 txid,uint256 cointxid);
 /// @private
-bool CompareHexVouts(std::string hex1, std::string hex2);
+bool CompareHexTx(std::string hex1, std::string hex2);
 /// @private
 bool CheckVinPk(const CTransaction &tx, int32_t n, std::vector<CPubKey> &pubkeys);
 /// @private

@@ -156,11 +156,22 @@ bool IsCCInput(CScript const& scriptSig)
     return true;
 }
 
-bool ValidateNormalVins(Eval* eval, const CTransaction& tx,int32_t index)
+bool ValidateNormalVins(Eval* eval, const CTransaction& tx,int32_t index, char *srcaddr)
 {
+    uint256 hashblock; CTransaction prevtx; char fromaddr[64];
+    
     for (int i=index;i<tx.vin.size();i++)
+    {
         if (IsCCInput(tx.vin[i].scriptSig) != 0 )
             return eval->Invalid("vin."+std::to_string(i)+" is normal for this tx!");
+        else if (srcaddr!=0)
+        {
+            if (myGetTransaction(tx.vin[i].prevout.hash,prevtx,hashblock) == 0)
+                return eval->Invalid("vin."+std::to_string(i)+" tx does not exist!");
+            else if (Getscriptaddress(fromaddr,prevtx.vout[tx.vin[i].prevout.n].scriptPubKey) && strcmp(srcaddr,fromaddr)!=0)
+                return eval->Invalid("invalid vin."+std::to_string(i)+" address, must be from tx creator pubkey address!");
+        }
+    }
     return (true);
 }
 
@@ -731,12 +742,14 @@ int32_t CCCointxidExists(char const *logcategory,uint256 txid, uint256 cointxid)
     return(myIs_coinaddr_inmempoolvout(logcategory,txid,txidaddr));
 }
 
-bool CompareHexVouts(std::string hex1, std::string hex2)
+bool CompareHexTx(std::string hex1, std::string hex2)
 {
     CTransaction tx1,tx2;
 
     if (!DecodeHexTx(tx1,hex1)) return (false);
     if (!DecodeHexTx(tx2,hex2)) return (false);
+    if (tx1.vin.size()!=tx2.vin.size()) return (false);
+    for (int i=0;i<(int32_t)tx1.vin.size();i++) if (tx1.vin[i].prevout!=tx2.vin[i].prevout) return (false);
     if (tx1.vout.size()!=tx2.vout.size()) return (false);
     for (int i=0;i<(int32_t)tx1.vout.size();i++) if (tx1.vout[i]!=tx2.vout[i]) return (false);
     return (true);
