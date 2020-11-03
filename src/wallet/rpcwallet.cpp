@@ -6556,33 +6556,11 @@ UniValue gatewaysbind(const UniValue& params, bool fHelp, const CPubKey& mypk)
     oracletxid = Parseuint256((char *)params[1].get_str().c_str());
     coin = params[2].get_str();
     totalsupply = atol((char *)params[3].get_str().c_str());
-    M = atoi((char *)params[4].get_str().c_str());
-    N = atoi((char *)params[5].get_str().c_str());
-    if ( M > N || N == 0 || N > 15 || totalsupply < COIN/100 || tokenid == zeroid )
-    {
-        Unlock2NSPV(mypk);
-        throw runtime_error("illegal M or N > 15 or tokensupply or invalid tokenid\n");
-    }
-    if ( params.size() < 6+N+3 )
-    {
-        Unlock2NSPV(mypk);
-        throw runtime_error("not enough parameters for N pubkeys\n");
-    }
-    for (i=0; i<N; i++)
-    {       
-        pubkey = ParseHex(params[6+i].get_str().c_str());
-        if (pubkey.size()!= 33)
-        {
-            Unlock2NSPV(mypk);
-            throw runtime_error("invalid destination pubkey");
-        }
-        pubkeys.push_back(pubkey2pk(pubkey));
-    }
-    p1 = atoi((char *)params[6+N].get_str().c_str());
-    p2 = atoi((char *)params[6+N+1].get_str().c_str());
-    p3 = atoi((char *)params[6+N+2].get_str().c_str());
-    if (params.size() == 9+N+1) p4 = atoi((char *)params[9+N].get_str().c_str());
-    result = GatewaysBind(mypk,0,coin,tokenid,totalsupply,oracletxid,M,N,pubkeys,p1,p2,p3,p4);
+    p1 = atoi((char *)params[4].get_str().c_str());
+    p2 = atoi((char *)params[5].get_str().c_str());
+    p3 = atoi((char *)params[6].get_str().c_str());
+    if (params.size() == 8) p4 = atoi((char *)params[7].get_str().c_str());
+    result = GatewaysBind(mypk,0,coin,tokenid,totalsupply,oracletxid,p1,p2,p3,p4);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
