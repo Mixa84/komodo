@@ -28,15 +28,15 @@
     #define GATEWAYSCC_VERSION 1
 #endif
 
-CScript EncodeGatewaysBindOpRet(uint8_t funcid,uint256 tokenid,std::string coin,int64_t totalsupply,uint256 oracletxid,uint8_t M,uint8_t N,std::vector<CPubKey> gatewaypubkeys,uint8_t taddr,uint8_t prefix,uint8_t prefix2,uint8_t wiftype)
+CScript EncodeGatewaysBindOpRet(uint8_t funcid,uint256 tokenid,std::string coin,int64_t totalsupply,uint256 oracletxid,uint8_t taddr,uint8_t prefix,uint8_t prefix2,uint8_t wiftype)
 {
     CScript opret; uint8_t evalcode = EVAL_GATEWAYS; vscript_t vopret;
     
-    vopret = E_MARSHAL(ss << evalcode << funcid << (uint8_t)GATEWAYSCC_VERSION << coin << totalsupply << oracletxid << M << N << gatewaypubkeys << taddr << prefix << prefix2 << wiftype);
+    vopret = E_MARSHAL(ss << evalcode << funcid << (uint8_t)GATEWAYSCC_VERSION << coin << totalsupply << oracletxid << taddr << prefix << prefix2 << wiftype);
     return(V2::EncodeTokenOpRet(tokenid, {}, { vopret }));
 }
 
-uint8_t DecodeGatewaysBindOpRet(char *depositaddr,const CScript &scriptPubKey,uint8_t &version,uint256 &tokenid,std::string &coin,int64_t &totalsupply,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &gatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype)
+uint8_t DecodeGatewaysBindOpRet(const CScript &scriptPubKey,uint8_t &version,uint256 &tokenid,std::string &coin,int64_t &totalsupply,uint256 &oracletxid,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype)
 {
     std::vector<vscript_t>  oprets;
     std::vector<uint8_t> vopret,vOpretExtra; uint8_t *script,e,f; std::vector<CPubKey> pubkeys;
@@ -47,23 +47,47 @@ uint8_t DecodeGatewaysBindOpRet(char *depositaddr,const CScript &scriptPubKey,ui
     }
     else GetOpReturnData(scriptPubKey, vopret);
     script = (uint8_t *)vopret.data();
-    depositaddr[0] = 0;
-    if ( vopret.size() > 2 && script[0]==EVAL_GATEWAYS && E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> version; ss >> coin; ss >> totalsupply; ss >> oracletxid; ss >> M; ss >> N; ss >> gatewaypubkeys; ss >> taddr; ss >> prefix; ss >> prefix2; ss >> wiftype) != 0 )
+    if ( vopret.size() > 2 && script[0]==EVAL_GATEWAYS && E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> version; ss >> coin; ss >> totalsupply; ss >>oracletxid; ss >> taddr; ss >> prefix; ss >> prefix2; ss >> wiftype) != 0 )
     {
+        return(f);
+    } else LOGSTREAM("gatewayscc",CCLOG_DEBUG1, stream << "error decoding bind opret" << std::endl);
+    return(0);
+}
+
+CScript EncodeGatewaysRegisterOpRet(uint8_t funcid,uint256 bindtxid,std::string refcoin, uint8_t M, uint8_t N, std::vector<CPubKey> pubkeys)
+{
+    CScript opret; uint8_t evalcode = EVAL_GATEWAYS;
+
+    opret << OP_RETURN << E_MARSHAL(ss << evalcode << funcid << (uint8_t)GATEWAYSCC_VERSION << bindtxid << refcoin << M << N << pubkeys);
+    return(opret);
+}
+
+uint8_t DecodeGatewaysRegisterOpRet(char *depositaddr,const CScript &scriptPubKey,uint8_t &version,uint256 &bindtxid,std::string &refcoin, uint8_t &M, uint8_t &N, std::vector<CPubKey> &pubkeys)
+{
+    std::vector<uint8_t> vopret; uint8_t *script,e,f; CTransaction tx; uint8_t tmpversion,taddr,prefix,prefix2,wiftype;
+    int64_t totalsupply; std::string coin; uint256 tokenid,oracletxid,hashBlock; struct CCcontract_info *cp,C;
+
+    cp = CCinit(&C,EVAL_GATEWAYS);
+    GetOpReturnData(scriptPubKey, vopret);
+    script = (uint8_t *)vopret.data();
+    depositaddr[0] = 0;
+    if ( vopret.size() > 2 && script[0]==EVAL_GATEWAYS && E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> version; ss >> bindtxid; ss >> refcoin; ss >> M; ss >> N; ss >> pubkeys) != 0 )
+    {
+        if (myGetTransactionCCV2(cp,bindtxid,tx,hashBlock)==0 || DecodeGatewaysBindOpRet(tx.vout[tx.vout.size()-1].scriptPubKey,tmpversion,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype)==0) return (0);
         if ( prefix == KMD_PUBTYPE && prefix2 == KMD_P2SHTYPE )
         {
             if ( N > 1 )
             {
-                strcpy(depositaddr,CBitcoinAddress(CScriptID(GetScriptForMultisig(M,gatewaypubkeys))).ToString().c_str());
-            } else Getscriptaddress(depositaddr,CScript() << ParseHex(HexStr(gatewaypubkeys[0])) << OP_CHECKSIG);
+                strcpy(depositaddr,CBitcoinAddress(CScriptID(GetScriptForMultisig(M,pubkeys))).ToString().c_str());
+            } else Getscriptaddress(depositaddr,CScript() << ParseHex(HexStr(pubkeys[0])) << OP_CHECKSIG);
         }
         else
         {
-            if ( N > 1 ) strcpy(depositaddr,CCustomBitcoinAddress(CScriptID(GetScriptForMultisig(M,gatewaypubkeys)),taddr,prefix,prefix2).ToString().c_str());
-            else GetCustomscriptaddress(depositaddr,CScript() << ParseHex(HexStr(gatewaypubkeys[0])) << OP_CHECKSIG,taddr,prefix,prefix2);
+            if ( N > 1 ) strcpy(depositaddr,CCustomBitcoinAddress(CScriptID(GetScriptForMultisig(M,pubkeys)),taddr,prefix,prefix2).ToString().c_str());
+            else GetCustomscriptaddress(depositaddr,CScript() << ParseHex(HexStr(pubkeys[0])) << OP_CHECKSIG,taddr,prefix,prefix2);
         }
         return(f);
-    } else LOGSTREAM("gatewayscc",CCLOG_DEBUG1, stream << "error decoding bind opret" << std::endl);
+    }
     return(0);
 }
 
@@ -333,8 +357,8 @@ int64_t GatewaysDepositval(CTransaction tx,CPubKey mypk)
 
 int32_t GatewaysBindExists(struct CCcontract_info *cp,CPubKey gatewayspk,uint256 reftokenid)
 {
-    char markeraddr[64],depositaddr[64]; std::string coin; int32_t numvouts; int64_t totalsupply; uint256 tokenid,oracletxid,tmptxid,hashBlock; 
-    uint8_t version,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> pubkeys; CTransaction tx;
+    char markeraddr[64]; std::string coin; int32_t numvouts; int64_t totalsupply; uint256 tokenid,tmptxid,hashBlock,oracletxid; 
+    uint8_t version,taddr,prefix,prefix2,wiftype; CTransaction tx;
     std::vector<uint256> txids;
 
     _GetCCaddress(markeraddr,cp->evalcode,gatewayspk,true);
@@ -343,7 +367,7 @@ int32_t GatewaysBindExists(struct CCcontract_info *cp,CPubKey gatewayspk,uint256
     {
         if ( myGetTransactionCCV2(cp,*it,tx,hashBlock) != 0 && (numvouts= tx.vout.size()) > 0 && DecodeGatewaysOpRet(tx.vout[numvouts-1].scriptPubKey,version,tmptxid)=='B' )
         {
-            if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) == 'B' )
+            if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) == 'B' )
             {
                 if ( tokenid == reftokenid )
                 {
@@ -360,7 +384,7 @@ int32_t GatewaysBindExists(struct CCcontract_info *cp,CPubKey gatewayspk,uint256
         const CTransaction &txmempool = *it;
 
         if ((numvouts=txmempool.vout.size()) > 0 && IsTxCCV2(cp,txmempool) && txmempool.vout[0].nValue==CC_MARKER_VALUE && DecodeGatewaysOpRet(tx.vout[numvouts-1].scriptPubKey,version,tmptxid)=='B')
-            if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) == 'B' &&
+            if (DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) == 'B' &&
             tokenid == reftokenid)
                 return(1);
     }
@@ -429,7 +453,7 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                     //vout.102: opreturn - 'B' tokenid coin totalsupply oracletxid M N pubkeys taddr prefix prefix2 wiftype
                     if (numvouts!=103)
                         return eval->Invalid("invalid number of vouts for gatewaysbind!");
-                    if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,refcoin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)!='B')
+                    if (DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,refcoin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype)!='B')
                         return eval->Invalid("invalid gatewaysbind OP_RETURN data!"); 
                     if ( GatewaysBindExists(cp,gatewayspk,tokenid) != 0 )
                         return eval->Invalid("Gateway bind."+refcoin+" ("+tokenid.GetHex()+") already exists");
@@ -497,7 +521,7 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                     //vout.1: normal output marker to txidaddr                           
                     //vout.2: CC vout change of gateways tokens to gateways tokens CC address
                     //vout.3: normal change
-                    //vout.4: opreturn - 'C' tokenid bindtxid coin deposittxid destpub amount
+                    //vout.4: opreturn - 'D' tokenid bindtxid coin deposittxid destpub amount
                     if (numvouts!=5)
                         return eval->Invalid("invalid number of vouts for gatewaysdeposit tx!");
                     if (DecodeGatewaysDepositOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,bindtxid,tmprefcoin,txids,height,hex,proof,pubkey,amount) != 'D')
@@ -522,7 +546,7 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                         return eval->Invalid("vout.3 is normal change for gatewaysdeposit!");
                     if (myGetTransactionCCV2(cp,bindtxid,tmptx,hashblock) == 0)
                         return eval->Invalid("invalid gatewaysbind txid!");
-                    if (DecodeGatewaysBindOpRet(depositaddr,tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,refcoin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+                    if (DecodeGatewaysBindOpRet(tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,refcoin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
                         return eval->Invalid("invalid gatewaysbind OP_RETURN data!"); 
                     if (tmprefcoin!=refcoin)
                         return eval->Invalid("refcoin different than in bind tx");
@@ -575,7 +599,7 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                         return eval->Invalid("withdraw amount must be greater then 0");   
                     if (myGetTransactionCCV2(cp,bindtxid,tmptx,hashblock) == 0)
                         return eval->Invalid("invalid gatewaysbind txid!");
-                    if (DecodeGatewaysBindOpRet(depositaddr,tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,tmprefcoin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+                    if (DecodeGatewaysBindOpRet(tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,tmprefcoin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
                         return eval->Invalid("invalid gatewaysbind OP_RETURN data!");
                     if (tmprefcoin!=refcoin)
                         return eval->Invalid("refcoin different than in bind tx"); 
@@ -633,7 +657,7 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                         return eval->Invalid("refcoin different than in withdraw tx");   
                     if (myGetTransactionCCV2(cp,bindtxid,tmptx,hashblock) == 0)
                         return eval->Invalid("invalid gatewaysbind txid!");
-                    if (DecodeGatewaysBindOpRet(depositaddr,tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,tmprefcoin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+                    if (DecodeGatewaysBindOpRet(tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,tmprefcoin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
                         return eval->Invalid("invalid gatewaysbind OP_RETURN data!");                     
                     if (lasttxid==withdrawtxid && Getscriptaddress(destaddr,CScript() << ParseHex(HexStr(destpub)) << OP_CHECKSIG)==0 || ConstrainVout(withdrawtx.vout[0],0,destaddr,0)==0)
                         return eval->Invalid("invalid vout.0 in external withdraw tx, should be coins to user pubkey from withdraw tx!");
@@ -691,7 +715,7 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
                         return eval->Invalid("refcoin different than in withdraw tx");
                     if (myGetTransactionCCV2(cp,bindtxid,tmptx,hashblock) == 0)
                         return eval->Invalid("invalid gatewaysbind txid!");
-                    if (DecodeGatewaysBindOpRet(depositaddr,tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,tmprefcoin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+                    if (DecodeGatewaysBindOpRet(tmptx.vout[tmptx.vout.size()-1].scriptPubKey,version,tmptokenid,tmprefcoin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
                         return eval->Invalid("invalid gatewaysbind OP_RETURN data!");
                     if (tx.vin[0].prevout.hash!=withdrawsigntxid)
                         return eval->Invalid("vin.0 is not coming from withdrawsigntxid vout");
@@ -722,14 +746,14 @@ bool GatewaysValidate(struct CCcontract_info *cp,Eval *eval,const CTransaction &
 
 int64_t AddGatewaysInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKey pk,uint256 bindtxid,int64_t total,int32_t maxinputs)
 {
-    char coinaddr[64],depositaddr[64]; int64_t threshold,nValue,price,totalinputs = 0,totalsupply,amount; 
-    CTransaction vintx,bindtx; int32_t vout,numvouts,n = 0,height; uint8_t version,M,N,evalcode,funcid,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> pubkeys;
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; std::string refcoin,tmprefcoin; std::vector<uint8_t> hex; CPubKey withdrawpub,destpub,tmppk,pubkey;
-    uint256 tokenid,txid,oracletxid,tmpbindtxid,tmptokenid,deposittxid,hashBlock; std::vector<uint256> txids; std::vector<uint8_t> proof; 
+    char coinaddr[64]; int64_t threshold,nValue,price,totalinputs = 0,totalsupply,amount; 
+    CTransaction vintx,bindtx; int32_t vout,numvouts,n = 0,height; uint8_t version,evalcode,funcid,taddr,prefix,prefix2,wiftype;
+    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; std::string refcoin,tmprefcoin; std::vector<uint8_t> hex;
+    CPubKey withdrawpub,destpub,tmppk,pubkey; uint256 tokenid,oracletxid,txid,tmpbindtxid,tmptokenid,deposittxid,hashBlock; std::vector<uint256> txids; std::vector<uint8_t> proof; 
 
     if ( myGetTransactionCCV2(cp,bindtxid,bindtx,hashBlock) != 0 )
     {
-        if ((numvouts=bindtx.vout.size())!=0 && DecodeGatewaysBindOpRet(depositaddr,bindtx.vout[numvouts-1].scriptPubKey,version,tokenid,refcoin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) == 'B')
+        if ((numvouts=bindtx.vout.size())!=0 && DecodeGatewaysBindOpRet(bindtx.vout[numvouts-1].scriptPubKey,version,tokenid,refcoin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) == 'B')
         {
             GetTokensCCaddress(cp,coinaddr,pk,true);
             SetCCunspents(unspentOutputs,coinaddr,true);
@@ -769,7 +793,7 @@ int64_t AddGatewaysInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,CP
     return(0);
 }
 
-UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256 tokenid,int64_t totalsupply,uint256 oracletxid,uint8_t M,uint8_t N,std::vector<CPubKey> pubkeys,uint8_t p1,uint8_t p2,uint8_t p3,uint8_t p4)
+UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256 tokenid,int64_t totalsupply,uint256 oracletxid, uint8_t p1,uint8_t p2,uint8_t p3,uint8_t p4)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction oracletx,tx; uint8_t version,taddr,prefix,prefix2,wiftype; CPubKey mypk,gatewayspk,regpk; CScript opret; uint256 hashBlock,txid,tmporacletxid;
@@ -778,7 +802,6 @@ UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256
     std::vector<CPubKey> publishers;
 
     cp = CCinit(&C,EVAL_GATEWAYS);
-    cpOracles = CCinit(&COracles,EVAL_ORACLESV2);
     cpTokens = CCinit(&CTokens,EVAL_TOKENSV2);
     if (coin=="KMD")
     {
@@ -794,31 +817,6 @@ UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256
         wiftype = p3;
         taddr = p4;
         LOGSTREAM("gatewayscc",CCLOG_DEBUG1, stream << "set prefix " << prefix << ", prefix2 " << prefix2 << ", wiftype " << wiftype << ", taddr " << taddr << " for " << coin << std::endl);
-    }
-    if ( N == 0 || N > 15 || M > N )
-        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "illegal M." << M << " or N." << N);
-    if ( pubkeys.size() != N )
-        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "M."<< M << " N." << N << " but pubkeys[" <<( int32_t)pubkeys.size() << "]");
-    CCtxidaddr_tweak(markeraddr,oracletxid);
-    SetCCunspents(unspentOutputs,markeraddr,false);
-    for (std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >::const_iterator it=unspentOutputs.begin(); it!=unspentOutputs.end(); it++)
-    {
-        txid = it->first.txhash;
-        if ( myGetTransactionCCV2(cpOracles,txid,tx,hashBlock) != 0
-            && DecodeOraclesV2OpRet(tx.vout[tx.vout.size()-1].scriptPubKey,version,tmporacletxid,regpk,datafee) == 'R' && oracletxid == tmporacletxid)
-        {
-            std::vector<CPubKey>::iterator it1 = std::find(pubkeys.begin(), pubkeys.end(), regpk);
-            if (it1 != pubkeys.end())
-                if (std::find(publishers.begin(), publishers.end(), regpk)==publishers.end()) publishers.push_back(regpk);
-        }
-    }
-    if (pubkeys.size()!=publishers.size())
-        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "different number of bind and oracle pubkeys " << publishers.size() << "!=" << pubkeys.size());
-    for (i=0; i<N; i++)
-    {
-        Getscriptaddress(coinaddr,CScript() << ParseHex(HexStr(pubkeys[i])) << OP_CHECKSIG);
-        if ( CCaddress_balance(coinaddr,0) == 0 )
-            CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "M."<<M<<"N."<<N<<" but pubkeys["<<i<<"] has no balance");
     }
     if ( txfee == 0 )
         txfee = ASSETCHAINS_CCZEROTXFEE[cp->evalcode]?0:CC_TXFEE;
@@ -850,11 +848,63 @@ UniValue GatewaysBind(const CPubKey& pk, uint64_t txfee,std::string coin,uint256
         {
             for (int i=0; i<100; i++) mtx.vout.push_back(V2::MakeTokensCC1vout(cp->evalcode,totalsupply/100,gatewayspk));       
             mtx.vout.push_back(MakeCC1voutMixed(cp->evalcode,CC_MARKER_VALUE,gatewayspk));
-            return(FinalizeCCV2Tx(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeGatewaysBindOpRet('B',tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)));
+            return(FinalizeCCV2Tx(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeGatewaysBindOpRet('B',tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype)));
         }
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find enough inputs");
     }
     CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "you must have total supply of tokens in your tokens address!");
+}
+
+UniValue GatewaysRegister(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,std::string refcoin,uint8_t M,uint8_t N,std::vector<CPubKey> pubkeys)
+{
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
+    CTransaction tx; CPubKey mypk,gatewayspk,regpk; uint256 oracletxid,tmporacletxid,hashBlock,tokenid,txid;
+    int64_t totalsupply,datafee; int32_t i,m,n,numvouts; uint8_t version,taddr,prefix,prefix2,wiftype; std::string coin; struct CCcontract_info *cp,*cpOracles,C,COracles;
+    std::vector<CPubKey> publishers; char depositaddr[64],coinaddr[64],markeraddr[64]; std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
+
+    cp = CCinit(&C,EVAL_GATEWAYS);
+    cpOracles = CCinit(&COracles,EVAL_ORACLESV2);
+    if ( txfee == 0 )
+        txfee = ASSETCHAINS_CCZEROTXFEE[cp->evalcode]?0:CC_TXFEE;
+    gatewayspk = GetUnspendable(cp,0);
+    mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
+    if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find bindtxid " << bindtxid.GetHex());
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid coin - bindtxid " << bindtxid.GetHex() << " coin." << coin);
+    if (komodo_txnotarizedconfirmed(bindtxid)==false)
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "gatewaysbind tx not yet confirmed/notarized");
+    if ( N == 0 || N > 15 || M > N )
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "illegal M." << M << " or N." << N);
+    if ( pubkeys.size() != N )
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "M."<< M << " N." << N << " but pubkeys[" <<( int32_t)pubkeys.size() << "]");    
+    CCtxidaddr_tweak(markeraddr,oracletxid);
+    SetCCunspents(unspentOutputs,markeraddr,false);
+    for (std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> >::const_iterator it=unspentOutputs.begin(); it!=unspentOutputs.end(); it++)
+    {
+        txid = it->first.txhash;
+        if ( myGetTransactionCCV2(cpOracles,txid,tx,hashBlock) != 0
+            && DecodeOraclesV2OpRet(tx.vout[tx.vout.size()-1].scriptPubKey,version,tmporacletxid,regpk,datafee) == 'R' && oracletxid == tmporacletxid)
+        {
+            std::vector<CPubKey>::iterator it1 = std::find(pubkeys.begin(), pubkeys.end(), regpk);
+            if (it1 != pubkeys.end())
+                if (std::find(publishers.begin(), publishers.end(), regpk)==publishers.end()) publishers.push_back(regpk);
+        }
+    }
+    if (pubkeys.size()!=publishers.size())
+        CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "different number of bind and oracle pubkeys " << publishers.size() << "!=" << pubkeys.size());
+    for (i=0; i<N; i++)
+    {
+        Getscriptaddress(coinaddr,CScript() << ParseHex(HexStr(pubkeys[i])) << OP_CHECKSIG);
+        if ( CCaddress_balance(coinaddr,0) == 0 )
+            CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "M."<<M<<"N."<<N<<" but pubkeys["<<i<<"] has no balance");
+    }
+    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) >= txfee+CC_MARKER_VALUE )
+    {
+        mtx.vout.push_back(MakeCC1voutMixed(cp->evalcode,CC_MARKER_VALUE,gatewayspk));
+        return(FinalizeCCV2Tx(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeGatewaysRegisterOpRet('R',bindtxid,coin,M,N,pubkeys)));
+    }
+    CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find enough inputs");
 }
 
 UniValue GatewaysDeposit(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,int32_t height,std::string refcoin,std::string deposithex,std::vector<uint8_t>proof,CPubKey destpub,int64_t amount)
@@ -872,7 +922,7 @@ UniValue GatewaysDeposit(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,int3
     LOGSTREAM("gatewayscc",CCLOG_DEBUG2, stream << "GatewaysDeposit ht." << height << " " << refcoin << " " << (double)amount/COIN << " numpks." << (int32_t)pubkeys.size() << std::endl);
     if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find bindtxid " << bindtxid.GetHex());
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid coin - bindtxid " << bindtxid.GetHex() << " coin." << coin);
     if (!destpub.IsFullyValid())
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "destination pubkey is invalid");
@@ -924,10 +974,9 @@ UniValue GatewaysDeposit(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,int3
 UniValue GatewaysWithdraw(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,std::string refcoin,CPubKey withdrawpub,int64_t amount)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    CTransaction tx; CPubKey mypk,gatewayspk,signerpk,tmpwithdrawpub; uint256 txid,tokenid,hashBlock,oracletxid,tmptokenid,tmpbindtxid,withdrawtxid; int32_t vout,numvouts,n,i;
-    int64_t nValue,totalsupply,inputs,CCchange=0,tmpamount,balance; uint8_t version,funcid,K,M,N,taddr,prefix,prefix2,wiftype; std::string coin;
-    std::vector<CPubKey> pubkeys; char depositaddr[64],coinaddr[64]; struct CCcontract_info *cp,C,*cpTokens,CTokens;
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
+    CTransaction tx; CPubKey mypk,gatewayspk,signerpk,tmpwithdrawpub; uint256 txid,tokenid,hashBlock,tmptokenid,tmpbindtxid,withdrawtxid,oracletxid; int32_t vout,numvouts,n,i;
+    int64_t nValue,totalsupply,inputs,CCchange=0,tmpamount,balance; uint8_t version,funcid,K,taddr,prefix,prefix2,wiftype; std::string coin; std::vector<CPubKey> pubkeys;
+    char coinaddr[64]; struct CCcontract_info *cp,C,*cpTokens,CTokens; std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs;
 
     cp = CCinit(&C,EVAL_GATEWAYS);
     cpTokens = CCinit(&CTokens,EVAL_TOKENSV2);
@@ -937,7 +986,7 @@ UniValue GatewaysWithdraw(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,std
     gatewayspk = GetUnspendable(cp, 0);
     if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find bindtxid " << bindtxid.GetHex());
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid coin - bindtxid " << bindtxid.GetHex() << " coin." << coin);
     if (!withdrawpub.IsFullyValid())
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "withdraw destination pubkey is invalid");
@@ -967,7 +1016,7 @@ UniValue GatewaysWithdraw(const CPubKey& pk, uint64_t txfee,uint256 bindtxid,std
 UniValue GatewaysWithdrawSign(const CPubKey& pk, uint64_t txfee,uint256 lasttxid,std::string refcoin, std::string hex)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    CPubKey mypk,tmppk,gatewayspk,withdrawpub; struct CCcontract_info *cp,C; char funcid,depositaddr[64]; int64_t amount;
+    CPubKey mypk,tmppk,gatewayspk,withdrawpub; struct CCcontract_info *cp,C; char funcid; int64_t amount;
     std::string coin; std::vector<uint8_t> tmphex; CTransaction tx,tmptx; uint256 tmptxid,withdrawtxid,tmplasttxid,tokenid,tmptokenid,hashBlock,bindtxid,oracletxid; int32_t numvouts;
     uint8_t version,K=0,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> pubkeys,signingpubkeys; int64_t totalsupply;
 
@@ -986,7 +1035,7 @@ UniValue GatewaysWithdrawSign(const CPubKey& pk, uint64_t txfee,uint256 lasttxid
            CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cannot decode withdraw tx opret " << lasttxid.GetHex());
         else if (myGetTransactionCCV2(cp,bindtxid,tmptx,hashBlock)==0 || (numvouts=tmptx.vout.size())<=0)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "can't find bind tx " << bindtxid.GetHex());
-        else if (DecodeGatewaysBindOpRet(depositaddr,tmptx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin!=coin || tokenid!=tmptokenid)
+        else if (DecodeGatewaysBindOpRet(tmptx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin!=coin || tokenid!=tmptokenid)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid bind tx "<<bindtxid.GetHex());
         else if (komodo_txnotarizedconfirmed(withdrawtxid)==false)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "gatewayswithdraw tx not yet confirmed/notarized");
@@ -1001,7 +1050,7 @@ UniValue GatewaysWithdrawSign(const CPubKey& pk, uint64_t txfee,uint256 lasttxid
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cannot decode withdraw tx opret " << withdrawtxid.GetHex());
         else if (myGetTransactionCCV2(cp,bindtxid,tmptx,hashBlock)==0 || (numvouts=tmptx.vout.size())<=0)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "can't find bind tx " << bindtxid.GetHex());
-        else if (DecodeGatewaysBindOpRet(depositaddr,tmptx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin!=coin || tokenid!=tmptokenid)
+        else if (DecodeGatewaysBindOpRet(tmptx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin!=coin || tokenid!=tmptokenid)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid bind tx "<< bindtxid.GetHex());
         else if (komodo_txnotarizedconfirmed(withdrawtxid)==false)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "gatewayswithdraw tx not yet confirmed/notarized");
@@ -1019,9 +1068,9 @@ UniValue GatewaysWithdrawSign(const CPubKey& pk, uint64_t txfee,uint256 lasttxid
 UniValue GatewaysMarkDone(const CPubKey& pk, uint64_t txfee,uint256 withdrawsigntxid,std::string refcoin)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    CPubKey mypk,tmppk; struct CCcontract_info *cp,C; char depositaddr[64]; CTransaction tx; int32_t numvouts;
-    uint256 withdrawtxid,tmplasttxid,tokenid,tmptokenid,bindtxid,oracletxid,hashBlock; std::string coin; std::vector<uint8_t> hex;
-    uint8_t version,K,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> pubkeys,signingpubkeys; int64_t amount,totalsupply; CPubKey withdrawpub;
+    CPubKey mypk,tmppk; struct CCcontract_info *cp,C; CTransaction tx; int32_t numvouts;
+    uint256 withdrawtxid,tmplasttxid,tokenid,tmptokenid,bindtxid,hashBlock,oracletxid; std::string coin; std::vector<uint8_t> hex;
+    uint8_t version,K,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> signingpubkeys; int64_t amount,totalsupply; CPubKey withdrawpub;
 
     cp = CCinit(&C,EVAL_GATEWAYS);
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());    
@@ -1037,7 +1086,7 @@ UniValue GatewaysMarkDone(const CPubKey& pk, uint64_t txfee,uint256 withdrawsign
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cannot decode withdraw tx opret " << withdrawtxid.GetHex());
     else if (myGetTransactionCCV2(cp,bindtxid,tx,hashBlock)==0 || (numvouts=tx.vout.size())<=0)
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "can't find bind tx " << bindtxid.GetHex());
-    else if (DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin!=coin || tokenid!=tmptokenid)
+    else if (DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin!=coin || tokenid!=tmptokenid)
             CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid bind tx "<< bindtxid.GetHex());
     mtx.vin.push_back(CTxIn(withdrawsigntxid,0,CScript()));
     if (AddNormalinputs(mtx,mypk,txfee,3)>=txfee) 
@@ -1051,8 +1100,8 @@ UniValue GatewaysMarkDone(const CPubKey& pk, uint64_t txfee,uint256 withdrawsign
 UniValue GatewaysPendingSignWithdraws(const CPubKey& pk, uint256 bindtxid,std::string refcoin)
 {
     UniValue result(UniValue::VOBJ),pending(UniValue::VARR); CTransaction tx,withdrawtx; std::string coin; std::vector<uint8_t> hex; CPubKey mypk,tmppk,gatewayspk,withdrawpub;
-    std::vector<CPubKey> msigpubkeys; uint256 hashBlock,txid,tmpbindtxid,tokenid,tmptokenid,oracletxid,withdrawtxid,tmplasttxid; uint8_t version,K=0,M,N,taddr,prefix,prefix2,wiftype;
-    char funcid,gatewaystokensaddr[65],str[65],depositaddr[65],coinaddr[65],destaddr[65],withaddr[65],numstr[32],signeraddr[65],txidaddr[65];
+    std::vector<CPubKey> msigpubkeys; uint256 hashBlock,txid,tmpbindtxid,tokenid,tmptokenid,withdrawtxid,tmplasttxid,oracletxid; uint8_t version,K=0,N,M,taddr,prefix,prefix2,wiftype;
+    char funcid,depositaddr[64],gatewaystokensaddr[65],str[65],coinaddr[65],destaddr[65],withaddr[65],numstr[32],signeraddr[65],txidaddr[65];
     int32_t i,n,numvouts,vout,queueflag; int64_t amount,nValue,totalsupply; struct CCcontract_info *cp,C; std::vector<CPubKey> signingpubkeys;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; std::vector<CTransaction> txs; std::vector<CTransaction> tmp_txs;
 
@@ -1062,7 +1111,7 @@ UniValue GatewaysPendingSignWithdraws(const CPubKey& pk, uint256 bindtxid,std::s
     _GetCCaddress(coinaddr,cp->evalcode,gatewayspk,true);
     if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find bindtxid " << bindtxid.GetHex());
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,msigpubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid bindtxid " << bindtxid.GetHex() << " coin." << coin);
     n = msigpubkeys.size();
     queueflag = 0;
@@ -1178,10 +1227,10 @@ UniValue GatewaysPendingSignWithdraws(const CPubKey& pk, uint256 bindtxid,std::s
 UniValue GatewaysSignedWithdraws(const CPubKey& pk, uint256 bindtxid,std::string refcoin)
 {
     UniValue result(UniValue::VOBJ),processed(UniValue::VARR); CTransaction tx,tmptx,withdrawtx; std::string coin; std::vector<uint8_t> hex; 
-    CPubKey mypk,tmppk,gatewayspk,withdrawpub; std::vector<CPubKey> msigpubkeys;
+    CPubKey mypk,tmppk,gatewayspk,withdrawpub;
     uint256 withdrawtxid,tmplasttxid,tmpbindtxid,tokenid,tmptokenid,hashBlock,txid,oracletxid; uint8_t version,K,M,N,taddr,prefix,prefix2,wiftype;
-    char depositaddr[65],signeraddr[65],coinaddr[65],numstr[32],withaddr[65],txidaddr[65];
-    int32_t i,n,numvouts,vout,queueflag; int64_t nValue,amount,totalsupply; struct CCcontract_info *cp,C; std::vector<CPubKey> signingpubkeys;
+    char depositaddr[64],signeraddr[65],coinaddr[65],numstr[32],withaddr[65],txidaddr[65];
+    int32_t i,n,numvouts,vout,queueflag; int64_t nValue,amount,totalsupply; struct CCcontract_info *cp,C; std::vector<CPubKey> pubkeys,signingpubkeys;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; std::vector<CTransaction> txs; std::vector<CTransaction> tmp_txs;
 
     cp = CCinit(&C,EVAL_GATEWAYS);
@@ -1190,12 +1239,12 @@ UniValue GatewaysSignedWithdraws(const CPubKey& pk, uint256 bindtxid,std::string
     _GetCCaddress(coinaddr,cp->evalcode,gatewayspk,true);
     if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "cant find bindtxid " << bindtxid.GetHex());
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,msigpubkeys,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin)
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B' || refcoin != coin)
         CCERR_RESULT("gatewayscc",CCLOG_ERROR, stream << "invalid bindtxid " << bindtxid.GetHex() << " coin." << coin);
-    n = msigpubkeys.size();
+    n = pubkeys.size();
     queueflag = 0;
     for (i=0; i<n; i++)
-        if ( msigpubkeys[i] == mypk )
+        if ( pubkeys[i] == mypk )
         {
             queueflag = 1;
             break;
@@ -1261,8 +1310,8 @@ UniValue GatewaysSignedWithdraws(const CPubKey& pk, uint256 bindtxid,std::string
 
 UniValue GatewaysList()
 {
-    UniValue result(UniValue::VARR); std::vector<uint256> txids; struct CCcontract_info *cp,C; uint256 txid,hashBlock,oracletxid,tokenid; CPubKey Gatewayspk;
-    CTransaction vintx; std::string coin; int64_t totalsupply; char str[65],depositaddr[64],gatewaysaddr[64]; uint8_t version,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> pubkeys;
+    UniValue result(UniValue::VARR); std::vector<uint256> txids; struct CCcontract_info *cp,C; uint256 txid,hashBlock,tokenid,oracletxid; CPubKey Gatewayspk;
+    CTransaction vintx; std::string coin; int64_t totalsupply; char str[65],gatewaysaddr[64]; uint8_t version,taddr,prefix,prefix2,wiftype;
     
     cp = CCinit(&C,EVAL_GATEWAYS);
     Gatewayspk = GetUnspendable(cp,0);
@@ -1273,7 +1322,7 @@ UniValue GatewaysList()
         txid = *it;
         if ( myGetTransactionCCV2(cp,txid,vintx,hashBlock) != 0 )
         {
-            if ( vintx.vout.size() > 0 && DecodeGatewaysBindOpRet(depositaddr,vintx.vout[vintx.vout.size()-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 0 )
+            if ( vintx.vout.size() > 0 && DecodeGatewaysBindOpRet(vintx.vout[vintx.vout.size()-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 0 )
             {
                 result.push_back(uint256_str(str,txid));
             }
@@ -1284,8 +1333,8 @@ UniValue GatewaysList()
 
 UniValue GatewaysExternalAddress(uint256 bindtxid,CPubKey pubkey)
 {
-    UniValue result(UniValue::VOBJ); struct CCcontract_info *cp,C; uint256 txid,hashBlock,oracletxid,tokenid; CTransaction tx;
-    std::string coin; int64_t numvouts,totalsupply; char str[65],addr[65],depositaddr[65]; uint8_t version,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> msigpubkeys;
+    UniValue result(UniValue::VOBJ); struct CCcontract_info *cp,C; uint256 txid,hashBlock,tokenid,oracletxid; CTransaction tx;
+    std::string coin; int64_t numvouts,totalsupply; char str[65],addr[65]; uint8_t version,taddr,prefix,prefix2,wiftype;
     
     cp = CCinit(&C,EVAL_GATEWAYS);
     if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
@@ -1294,7 +1343,7 @@ UniValue GatewaysExternalAddress(uint256 bindtxid,CPubKey pubkey)
         result.push_back(Pair("error",strprintf("cant find bindtxid %s",uint256_str(str,bindtxid))));     
         return(result);
     }
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,msigpubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
     {
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error",strprintf("invalid bindtxid %s coin.%s",uint256_str(str,bindtxid),coin.c_str())));     
@@ -1308,8 +1357,8 @@ UniValue GatewaysExternalAddress(uint256 bindtxid,CPubKey pubkey)
 
 UniValue GatewaysDumpPrivKey(uint256 bindtxid,CKey key)
 {
-    UniValue result(UniValue::VOBJ); struct CCcontract_info *cp,C; uint256 txid,hashBlock,oracletxid,tokenid; CTransaction tx;
-    std::string coin,priv; int64_t numvouts,totalsupply; char str[65],addr[65],depositaddr[65]; uint8_t version,M,N,taddr,prefix,prefix2,wiftype; std::vector<CPubKey> msigpubkeys;
+    UniValue result(UniValue::VOBJ); struct CCcontract_info *cp,C; uint256 txid,hashBlock,tokenid,oracletxid; CTransaction tx;
+    std::string coin,priv; int64_t numvouts,totalsupply; char str[65],addr[65]; uint8_t version,taddr,prefix,prefix2,wiftype;
     
     cp = CCinit(&C,EVAL_GATEWAYS);
     if ( myGetTransactionCCV2(cp,bindtxid,tx,hashBlock) == 0 || (numvouts= tx.vout.size()) <= 0 )
@@ -1318,7 +1367,7 @@ UniValue GatewaysDumpPrivKey(uint256 bindtxid,CKey key)
         result.push_back(Pair("error",strprintf("cant find bindtxid %s",uint256_str(str,bindtxid))));     
         return(result);  
     }
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,msigpubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
     {
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error",strprintf("invalid bindtxid %s coin.%s",uint256_str(str,bindtxid),coin.c_str())));     
@@ -1346,7 +1395,7 @@ UniValue GatewaysInfo(uint256 bindtxid)
         result.push_back(Pair("error",strprintf("cant find bindtxid %s",uint256_str(str,bindtxid))));     
         return(result);
     }
-    if ( DecodeGatewaysBindOpRet(depositaddr,tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype) != 'B')
+    if ( DecodeGatewaysBindOpRet(tx.vout[numvouts-1].scriptPubKey,version,tokenid,coin,totalsupply,oracletxid,taddr,prefix,prefix2,wiftype) != 'B')
     {
         result.push_back(Pair("result","error"));
         result.push_back(Pair("error",strprintf("invalid bindtxid %s coin.%s",uint256_str(str,bindtxid),coin.c_str())));     
