@@ -655,18 +655,22 @@ UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64
                 }
                 else
                 {
-                    hentropy = DiceHashEntropy(entropy,channelOpenTx.vin[0].prevout.hash,channelOpenTx.vin[0].prevout.n,1);
-                    if (prevdepth-numpayments)
-                    {
-                        endiancpy(hash, (uint8_t * ) & hentropy, 32);
-                        for (i = 0; i < prevdepth-numpayments; i++)
+                    if (pk.IsValid()) secret=zeroid;
+                    else
+                    {    
+                        hentropy = DiceHashEntropy(entropy,channelOpenTx.vin[0].prevout.hash,channelOpenTx.vin[0].prevout.n,1);
+                        if (prevdepth-numpayments)
                         {
-                            vcalc_sha256(0, hashdest, hash, 32);
-                            memcpy(hash, hashdest, 32);
+                            endiancpy(hash, (uint8_t * ) & hentropy, 32);
+                            for (i = 0; i < prevdepth-numpayments; i++)
+                            {
+                                vcalc_sha256(0, hashdest, hash, 32);
+                                memcpy(hash, hashdest, 32);
+                            }
+                            endiancpy((uint8_t * ) & secret, hashdest, 32);
                         }
-                        endiancpy((uint8_t * ) & secret, hashdest, 32);
+                        else endiancpy((uint8_t * ) & secret, (uint8_t * ) & hentropy, 32);
                     }
-                    else endiancpy((uint8_t * ) & secret, (uint8_t * ) & hentropy, 32);
                 }
             }
             else 
