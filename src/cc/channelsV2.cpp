@@ -477,7 +477,7 @@ bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
 int64_t AddChannelsInputs(struct CCcontract_info *cp,CMutableTransaction &mtx, CTransaction openTx, uint256 &prevtxid, CPubKey mypk)
 {
     char coinaddr[65],funcid; int64_t param2,totalinputs = 0,numvouts; uint256 txid=zeroid,tmp_txid,hashBlock,param3,tokenid; CTransaction tx; int32_t marker,param1;
-    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CPubKey srcpub,destpub; uint8_t myprivkey[32],version; uint16_t confirmation;
+    std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > unspentOutputs; CPubKey srcpub,destpub; uint8_t version; uint16_t confirmation;
 
     if ((numvouts=openTx.vout.size()) > 0 && DecodeChannelsOpRet(openTx.vout[numvouts-1].scriptPubKey,tokenid,tmp_txid,srcpub,destpub,param1,param2,param3,version,confirmation)=='O')
     {
@@ -576,14 +576,18 @@ UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t n
     else amount=AddNormalinputs(mtx,mypk,funds+txfee+2*CC_MARKER_VALUE,64,pk.IsValid());
     if (amount+tokens >= funds+txfee+2*CC_MARKER_VALUE)
     {
-        hentropy = DiceHashEntropy(entropy,mtx.vin[0].prevout.hash,mtx.vin[0].prevout.n,1);
-        endiancpy(hash,(uint8_t *)&hentropy,32);
-        for (i=0; i<numpayments; i++)
+        if (pk.IsValid()) hashchain=zeroid;
+        else
         {
-            vcalc_sha256(0,hashdest,hash,32);
-            memcpy(hash,hashdest,32);
+            hentropy = DiceHashEntropy(entropy,mtx.vin[0].prevout.hash,mtx.vin[0].prevout.n,1);
+            endiancpy(hash,(uint8_t *)&hentropy,32);
+            for (i=0; i<numpayments; i++)
+            {
+                vcalc_sha256(0,hashdest,hash,32);
+                memcpy(hash,hashdest,32);
+            }
+            endiancpy((uint8_t *)&hashchain,hashdest,32);
         }
-        endiancpy((uint8_t *)&hashchain,hashdest,32);
         if (tokenid!=zeroid) mtx.vout.push_back(V2::MakeTokensCC1of2vout(EVAL_CHANNELS,funds,mypk,destpub));
         else mtx.vout.push_back(MakeCC1of2voutMixed(EVAL_CHANNELS,funds,mypk,destpub));
         mtx.vout.push_back(MakeCC1voutMixed(EVAL_CHANNELS,CC_MARKER_VALUE,mypk));
