@@ -36,7 +36,6 @@ bool ValidateCCtx(const CTransaction& tx, struct CCcontract_info *cp)
 
 bool IsTxCCV2(struct CCcontract_info const *cp, const CTransaction &tx)
 {
-    uint256 hashBlock; CTransaction prevtx;
     for (int i=0;i<tx.vin.size();i++) if (cp->ismyvin(tx.vin[i].scriptSig)) return (true);
     for (int i=0;i<tx.vout.size();i++) if (tx.vout[i].scriptPubKey.HasEvalcodeCCV2(cp->evalcode)) return (true);
     return (false);
